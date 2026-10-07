@@ -3,3 +3,5 @@ dist/
 web-ext-artifacts/
 native/.venv/
 __pycache__/
+tmp/
+.DS_Store

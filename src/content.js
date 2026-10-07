@@ -80,6 +80,10 @@ function isDisabled(button) {
 // The merge button usually sits in a split-button group (or next to Cancel when
 // confirming); put our button after the whole group.
 function buttonGroup(merge) {
+  // GitHub's Primer split button: the merge button and the method menu are
+  // separate items in one ButtonGroup.
+  const group = merge.closest('[data-component="ButtonGroup"]');
+  if (group) return group;
   const parent = merge.parentElement;
   const siblings = parent ? [...parent.children].filter((c) => c !== merge && !c.classList.contains("gmh-button")) : [];
   if (parent && siblings.length <= 2 && siblings.some((c) => c.matches("button") || c.querySelector("button"))) return parent;
@@ -201,8 +205,14 @@ async function request(merge, force) {
   check();
 }
 
+// Below the merge box, as its sibling. Falls back to walking up out of
+// flex/grid rows so the panel gets its own full-width block.
 function placePanel(merge, panel) {
-  // Walk up out of flex/grid rows so the panel gets its own full-width block.
+  const box = merge.closest('[data-testid="mergebox-border-container"]');
+  if (box) {
+    box.after(panel);
+    return;
+  }
   let el = buttonGroup(merge);
   for (let i = 0; i < 10 && el.parentElement && el.parentElement !== document.body; i++) {
     const display = getComputedStyle(el.parentElement).display;
@@ -243,6 +253,9 @@ function showResult(merge) {
   body.value = suggestion.body;
   const checks = h("div", { className: "gmh-checks" });
   const onEdit = () => {
+    // Grow the description to fit (CSS caps the height).
+    body.style.height = "auto";
+    body.style.height = `${body.scrollHeight + 2}px`;
     setText(counter, `${title.value.length}/72`);
     counter.classList.toggle("gmh-over", title.value.length > 72);
     renderChecks(checks);
@@ -277,7 +290,7 @@ function showResult(merge) {
     title,
     h("label", { className: "gmh-label" }, "Description"),
     body,
-    trailers.length ? h("p", { className: "gmh-trailers" }, `Added on fill/copy: ${trailers.join(", ")}`) : null,
+    trailers.length ? h("p", { className: "gmh-trailers" }, `Added on fill/copy: ${uniqueTrailers(trailers).join(", ")}`) : null,
     checks,
     h("p", { className: "gmh-hint" }),
     h("div", { className: "gmh-actions" }, fillButton, copyButton, regenerateButton, undoButton),
@@ -366,9 +379,8 @@ function undo() {
   check();
 }
 
-// Title and body as they will be filled in: invisible characters stripped,
-// well-formed trailers only, deduped by email.
-function finalMessage(title, body, trailers) {
+// Well-formed trailers only, deduped by email.
+function uniqueTrailers(trailers) {
   const seen = new Set();
   const unique = [];
   for (const t of trailers) {
@@ -379,9 +391,14 @@ function finalMessage(title, body, trailers) {
     seen.add(key);
     unique.push(line);
   }
+  return unique;
+}
+
+// Title and body as they will be filled in, with invisible characters stripped.
+function finalMessage(title, body, trailers) {
   return {
     title: stripInvisible(title).text.replace(/\n/g, " ").trim(),
-    body: [stripInvisible(body).text.trim(), unique.join("\n")].filter(Boolean).join("\n\n"),
+    body: [stripInvisible(body).text.trim(), uniqueTrailers(trailers).join("\n")].filter(Boolean).join("\n\n"),
   };
 }
 

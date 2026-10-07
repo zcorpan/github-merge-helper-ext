@@ -17,7 +17,13 @@
 }
 
 .gmh-button {
-  margin-inline-start: 8px;
+  height: auto;
+  min-height: 32px;
+  white-space: normal;
+  flex: none;
+  align-self: flex-start;
+  justify-content: center;
+  max-width: 100%;
 }
 
 .gmh-button:hover:not(:disabled),
@@ -33,10 +39,15 @@
 
 .gmh-panel {
   position: relative;
+  display: block;
   box-sizing: border-box;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   flex: 1 0 100%;
-  margin: 12px 0;
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+  text-align: start;
   padding: 12px 16px;
   color: var(--fgColor-default, #1f2328);
   background: var(--bgColor-default, #fff);
@@ -116,6 +127,8 @@
 }
 
 .gmh-body {
+  min-height: 6em;
+  max-height: 60vh;
   resize: vertical;
 }
 
@@ -165,4 +178,25 @@
 .gmh-warning {
   font-weight: 600;
   color: var(--fgColor-attention, #9a6700);
+}
+
+.gmh-panel *,
+.gmh-panel *::before,
+.gmh-panel *::after {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.gmh-actions {
+  flex-wrap: wrap;
+}
+
+.gmh-title,
+.gmh-body {
+  display: block;
+}
+
+.gmh-error {
+  margin-inline-end: 24px !important;
+  white-space: pre-wrap;
 }
