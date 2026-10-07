@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "GitHub Merge Helper",
+  "version": "0.1.0",
+  "description": "Asks Claude to review or write the commit message when merging a GitHub pull request.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "github-merge-helper@zcorpan",
+      "strict_min_version": "142.0",
+      "data_collection_permissions": {
+        "required": ["websiteContent"]
+      }
+    }
+  },
+  "permissions": ["storage", "clipboardWrite"],
+  "host_permissions": ["https://api.anthropic.com/*", "https://api.github.com/*"],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://github.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"]
+    }
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  }
+}

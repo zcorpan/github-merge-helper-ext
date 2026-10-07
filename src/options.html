@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<meta charset="utf-8">
+<title>GitHub Merge Helper settings</title>
+<link rel="stylesheet" href="options.css">
+<h1>GitHub Merge Helper</h1>
+<form id="settings">
+  <label>Claude API key
+    <input type="password" name="apiKey" autocomplete="off" required placeholder="sk-ant-…">
+  </label>
+  <p class="help">From <a href="https://platform.claude.com/settings/keys">platform.claude.com</a>. Stored locally in this browser profile, not synced.</p>
+
+  <label>Model
+    <input type="text" name="model" list="models">
+    <datalist id="models">
+      <option value="claude-opus-5-5">
+      <option value="claude-sonnet-5-5">
+      <option value="claude-fable-5-1">
+    </datalist>
+  </label>
+
+  <label>Effort
+    <select name="effort">
+      <option>low</option>
+      <option>medium</option>
+      <option>high</option>
+      <option>xhigh</option>
+      <option>max</option>
+    </select>
+  </label>
+
+  <label>GitHub token (optional)
+    <input type="password" name="githubToken" autocomplete="off" placeholder="github_pat_…">
+  </label>
+  <p class="help">Only needed for private repositories or if you hit the unauthenticated rate limit (60 requests/hour). A fine-grained token with read-only “Pull requests” and “Contents” access is enough.</p>
+
+  <label>Extra instructions (optional)
+    <textarea name="extraInstructions" rows="6" placeholder="Added to every prompt, e.g. house style for other repositories."></textarea>
+  </label>
+
+  <button type="submit">Save</button>
+  <span id="status" role="status"></span>
+</form>
+<script src="options.js"></script>
