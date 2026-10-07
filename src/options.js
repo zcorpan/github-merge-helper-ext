@@ -5,7 +5,11 @@ const status = document.getElementById("status");
 const testStatus = document.getElementById("test-status");
 
 browser.storage.local.get(DEFAULTS).then((settings) => {
-  for (const name of Object.keys(DEFAULTS)) form.elements[name].value = settings[name];
+  for (const name of Object.keys(DEFAULTS)) {
+    const field = form.elements[name];
+    if (field.type === "checkbox") field.checked = settings[name];
+    else field.value = settings[name];
+  }
 });
 
 document.getElementById("test-connection").addEventListener("click", async () => {
@@ -18,7 +22,8 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const settings = {};
   for (const name of Object.keys(DEFAULTS)) {
-    settings[name] = form.elements[name].value.trim() || DEFAULTS[name];
+    const field = form.elements[name];
+    settings[name] = field.type === "checkbox" ? field.checked : field.value.trim() || DEFAULTS[name];
   }
   await browser.storage.local.set(settings);
   status.textContent = "Saved.";

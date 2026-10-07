@@ -27,7 +27,7 @@ let warnTimer = null;
 // Firefox injects the new version into open tabs while the old version's
 // elements stay in the page with handlers that no longer run.
 const INSTANCE = crypto.randomUUID();
-const OUR_ELEMENTS = ".gmh-button, .gmh-panel";
+const OUR_ELEMENTS = ".gmh-button, .gmh-restore, .gmh-panel";
 
 // Deals with a previous version's leftovers: a lone button is removed (ours
 // replaces it); a panel is kept, with its buttons disabled and a note to
@@ -57,7 +57,8 @@ function handleStale() {
 // "Files changed" and back.
 function freshState(key, owner, repo, number) {
   return { key, owner, repo, number, result: null, loading: false, filled: null, button: null, panel: null,
-    pageCommitCount: null, warned: false, noWriteAccess: false, lastScan: 0 };
+    pageCommitCount: null, warned: false, noWriteAccess: false, lastScan: 0,
+    cleanup: null, restoreButton: null };
 }
 
 function check() {
@@ -85,8 +86,13 @@ function check() {
     if (button.previousElementSibling !== group) group.after(button);
     setText(button, state.loading ? "Asking Claude…" : buttonLabel(merge));
     button.disabled = state.loading;
+    cleanUpSquash(merge);
+    const restore = cleanupInEffect(merge) ? (state.restoreButton ??= createRestoreButton()) : null;
+    if (restore && restore.previousElementSibling !== button) button.after(restore);
+    if (!restore) state.restoreButton?.remove();
   } else {
     state.button?.remove();
+    state.restoreButton?.remove();
     maybeWarn();
   }
 
@@ -208,6 +214,63 @@ function maybeWarn() {
       console.warn("[GitHub Merge Helper] Found the merge box but not the merge button; GitHub's markup may have changed.");
     }
   }, 3000);
+}
+
+// Cleans up GitHub's default squash message without Claude, once per commit
+// editor: drops the " (#N)" GitHub appends to the title, and uses the first
+// commit's description plus deduped Co-authored-by trailers as the body. Only
+// touches GitHub's untouched default (title still ends in " (#N)"), and only
+// if it wasn't edited while the commits were fetched. Never submits anything.
+// The title field is marked once tried, so a newer version injected after an
+// update doesn't redo it (e.g. after "Restore GitHub's message").
+function cleanUpSquash(merge) {
+  if (mergeMethod(merge) !== "squash") return;
+  const fields = commitFields(merge);
+  if (!fields || fields.title.dataset.gmhCleanup) return;
+  const prRef = new RegExp(`\\s*\\(#${state.number}\\)$`);
+  if (!prRef.test(fields.title.value)) return;
+  fields.title.dataset.gmhCleanup = "tried";
+  const s = state;
+  const before = { title: fields.title.value, body: fields.body.value };
+  browser.runtime
+    .sendMessage({ type: "squashDefaults", owner: s.owner, repo: s.repo, number: s.number })
+    .then((reply) => {
+      if (state !== s || !reply || reply.error || reply.disabled || !fields.title.isConnected) return;
+      if (fields.title.value !== before.title || fields.body.value !== before.body) return;
+      const existing = before.body.split("\n").filter((line) => /^co-authored-by:/i.test(line.trim()));
+      const trailers = uniqueTrailers([...existing, ...reply.trailers]);
+      const cleaned = {
+        title: before.title.replace(prRef, ""),
+        body: [String(reply.description).trim(), trailers.join("\n")].filter(Boolean).join("\n\n"),
+      };
+      setNativeValue(fields.title, cleaned.title);
+      setNativeValue(fields.body, cleaned.body);
+      s.cleanup = { fields, original: before, cleaned };
+      check();
+    })
+    .catch(() => {});
+}
+
+// Whether the cleaned-up message is still what's in the open commit editor.
+function cleanupInEffect(merge) {
+  const c = state.cleanup;
+  if (!c || !c.fields.title.isConnected) return false;
+  const fields = commitFields(merge);
+  return fields?.title === c.fields.title && fields.title.value === c.cleaned.title && fields.body.value === c.cleaned.body;
+}
+
+function createRestoreButton() {
+  const button = h("button", { type: "button", className: "gmh-restore" }, "Restore GitHub’s message");
+  button.dataset.gmhInstance = INSTANCE;
+  onClick(button, () => {
+    const c = state.cleanup;
+    if (!c) return;
+    setNativeValue(c.fields.title, c.original.title);
+    setNativeValue(c.fields.body, c.original.body);
+    state.cleanup = null;
+    check();
+  });
+  return button;
 }
 
 function createButton() {

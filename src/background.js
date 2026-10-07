@@ -38,6 +38,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.type === "restore") return restoreSaved({ owner, repo, number, key }).catch(() => null);
   if (message.type === "saveEdits") return saveEdits(key, message.title, message.body).catch(() => undefined);
   if (message.type === "forget") return browser.storage.local.remove(SAVED_PREFIX + key);
+  if (message.type === "squashDefaults") return squashDefaults({ owner, repo, number }).catch((e) => ({ error: describeError(e) }));
   if (message.type === "suggest") {
     if (inflight.has(key)) return inflight.get(key);
     const promise = suggest({ owner, repo, number, force: message.force === true })
@@ -186,6 +187,23 @@ async function restoreSaved({ owner, repo, number, key }) {
     // Offline or rate-limited: show it anyway.
   }
   return { ...result, edits: validEdits(entry.edits), stale };
+}
+
+// For cleaning up GitHub's default squash message without Claude: the first
+// commit's description (often the real one, the rest being fixups) and the
+// Co-authored-by trailers from all commits. Read-only GitHub requests only.
+async function squashDefaults({ owner, repo, number }) {
+  const settings = await browser.storage.local.get(DEFAULTS);
+  if (!settings.cleanUpSquash) return { disabled: true };
+  const commits = await fetchCommits(githubFor(settings, owner, repo).gh, number);
+  if (!commits.length) return { error: "This PR has no commits." };
+  const isTrailer = (line) => /^co-authored-by:/i.test(line.trim());
+  const [, ...rest] = commits[0].commit.message.split("\n");
+  const trailers = commits.flatMap((c) => c.commit.message.split("\n").filter(isTrailer));
+  return {
+    description: rest.filter((line) => !isTrailer(line)).join("\n").trim().slice(0, MAX_BODY_CHARS),
+    trailers: trailers.map(cleanTrailer).filter(Boolean),
+  };
 }
 
 function validEdits(edits) {

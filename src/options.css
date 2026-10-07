@@ -26,6 +26,12 @@ textarea {
   font-weight: 400;
 }
 
+label.checkbox input {
+  display: inline;
+  width: auto;
+  margin: 0 0.4em 0 0;
+}
+
 .help {
   margin: 0.25em 0 0;
   font-size: 13px;

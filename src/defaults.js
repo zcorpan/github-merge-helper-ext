@@ -3,4 +3,5 @@ export const DEFAULTS = {
   effort: "medium",
   githubToken: "",
   extraInstructions: "",
+  cleanUpSquash: true,
 };
