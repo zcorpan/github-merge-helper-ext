@@ -10,8 +10,13 @@ const MAX_CONTRIBUTING_CHARS = 30_000;
 const cache = new Map();
 
 browser.runtime.onMessage.addListener((message, sender) => {
-  // Only our own content script on github.com may ask.
-  if (sender.id !== browser.runtime.id || !sender.tab?.url?.startsWith("https://github.com/")) return undefined;
+  if (sender.id !== browser.runtime.id) return undefined;
+  // The settings page may test a key.
+  if (message?.type === "testKey" && sender.url === browser.runtime.getURL("options.html")) {
+    return testKey(String(message.apiKey ?? ""));
+  }
+  // Only our own content script on github.com may ask for suggestions.
+  if (!sender.tab?.url?.startsWith("https://github.com/")) return undefined;
   if (message?.type === "openOptions") return browser.runtime.openOptionsPage();
   if (message?.type === "suggest") {
     const { owner, repo, number, force } = message;
@@ -102,6 +107,18 @@ async function suggest({ owner, repo, number, force }) {
   return result;
 }
 
+// A free request (lists one model) to check that the key works.
+async function testKey(apiKey) {
+  if (!apiKey) return { error: "Enter a key first." };
+  try {
+    const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true, maxRetries: 0 });
+    await client.models.list({ limit: 1 });
+    return { ok: true };
+  } catch (e) {
+    return { error: describeError(e) };
+  }
+}
+
 function randomHex(bytes) {
   return [...crypto.getRandomValues(new Uint8Array(bytes))].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
@@ -174,13 +191,26 @@ async function coAuthorTrailers(api, pr, commits) {
 }
 
 function describeError(e) {
-  if (e instanceof Anthropic.AuthenticationError) return "Claude API key was rejected (401). Check the extension settings.";
-  if (e instanceof Anthropic.PermissionDeniedError) return `Claude API permission denied: ${e.message}`;
-  if (e instanceof Anthropic.NotFoundError) return `Claude API 404 (unknown model?): ${e.message}`;
-  if (e instanceof Anthropic.RateLimitError) return "Claude API rate limit hit. Try again shortly.";
-  if (e instanceof Anthropic.BadRequestError) return `Claude API rejected the request: ${e.message}`;
-  if (e instanceof Anthropic.InternalServerError) return `Claude API is having trouble (${e.status}). Try again shortly.`;
+  if (e instanceof Anthropic.APIError && e.status) {
+    // Include the API's own explanation (e.g. why a key was rejected).
+    const detail = e.error?.error?.message ?? e.message;
+    const id = e.requestID ? ` (request ID ${e.requestID})` : "";
+    const hint =
+      e instanceof Anthropic.AuthenticationError
+        ? "Claude API key was rejected"
+        : e instanceof Anthropic.PermissionDeniedError
+          ? "Claude API permission denied"
+          : e instanceof Anthropic.NotFoundError
+            ? "Claude API 404 (unknown model?)"
+            : e instanceof Anthropic.RateLimitError
+              ? "Claude API rate limit hit"
+              : e instanceof Anthropic.BadRequestError
+                ? "Claude API rejected the request"
+                : e instanceof Anthropic.InternalServerError
+                  ? "Claude API is having trouble"
+                  : "Claude API error";
+    return `${hint} (${e.status}): ${detail}${id}`;
+  }
   if (e instanceof Anthropic.APIConnectionError) return "Couldn't reach the Claude API.";
-  if (e instanceof Anthropic.APIError) return `Claude API error ${e.status ?? ""}: ${e.message}`;
   return e?.message ?? String(e);
 }

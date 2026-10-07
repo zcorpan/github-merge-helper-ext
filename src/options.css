@@ -37,6 +37,11 @@ button {
   font: inherit;
 }
 
-#status {
+#test-key {
+  margin-top: 0.5em;
+}
+
+#status,
+#test-status {
   margin-inline-start: 1em;
 }

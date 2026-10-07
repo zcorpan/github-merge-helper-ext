@@ -9,6 +9,9 @@
     <input type="password" name="apiKey" autocomplete="off" required placeholder="sk-ant-…">
   </label>
   <p class="help">From <a href="https://platform.claude.com/settings/keys">platform.claude.com</a>. Stored locally in this browser profile, not synced.</p>
+  <p class="help" id="saved-key"></p>
+  <button type="button" id="test-key">Test key</button>
+  <span id="test-status" role="status"></span>
 
   <label>Model
     <input type="text" name="model" list="models">
