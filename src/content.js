@@ -7,7 +7,7 @@
 // checked by safety.js for closing keywords, unexpected references, and
 // invisible characters. Clicks synthesized by page scripts are ignored.
 
-import { checkMessage, cleanTrailer, stripInvisible, validPullRef } from "./safety.js";
+import { checkMessage, cleanTrailer, issueLinks, stripInvisible, validPullRef } from "./safety.js";
 
 const MERGE_LABEL =
   /^(?:Merge pull request|Squash and merge|Rebase and merge|Enable auto-merge(?: \(\w+\))?|Confirm (?:merge|squash and merge|rebase and merge|auto-merge(?: \(\w+\))?))$/i;
@@ -284,8 +284,8 @@ function showResult(merge) {
     { className: "gmh-panel" },
     closeButton(),
     h("h3", { className: `gmh-heading gmh-${suggestion.verdict}` }, heading),
-    suggestion.issues.length ? h("ul", { className: "gmh-issues" }, ...suggestion.issues.map((i) => h("li", {}, i))) : null,
-    suggestion.notes ? h("p", { className: "gmh-notes" }, suggestion.notes) : null,
+    suggestion.issues.length ? h("ul", { className: "gmh-issues" }, ...suggestion.issues.map((i) => h("li", {}, ...linkified(i)))) : null,
+    suggestion.notes ? h("p", { className: "gmh-notes" }, ...linkified(suggestion.notes)) : null,
     diffTruncated ? h("p", { className: "gmh-notes" }, "The diff was too large and was truncated before sending.") : null,
     h("label", { className: "gmh-label" }, "Title ", counter),
     title,
@@ -318,12 +318,11 @@ function renderChecks(container) {
   const result = currentChecks();
   if (!result) return;
   const items = [
-    h("li", {}, result.closes.length ? `Merging closes ${result.closes.join(", ")}.` : "Merging closes no issues."),
+    h("li", {}, ...linkified(result.closes.length ? `Merging closes ${result.closes.join(", ")}.` : "Merging closes no issues.")),
   ];
   if (result.unknown.length) {
-    items.push(
-      h("li", { className: "gmh-warning" }, `Not in the PR title, description, or commits: ${result.unknown.join(", ")}. Check these are legitimate.`),
-    );
+    const text = `Not in the PR title, description, or commits: ${result.unknown.join(", ")}. Check these are legitimate.`;
+    items.push(h("li", { className: "gmh-warning" }, ...linkified(text)));
   }
   if (result.removed) {
     items.push(h("li", { className: "gmh-warning" }, `${result.removed} invisible or control character(s) were or will be removed.`));
@@ -426,6 +425,19 @@ function onClick(el, handler) {
   el.addEventListener("click", (event) => {
     if (event.isTrusted) handler(event);
   });
+}
+
+// Text with issue references turned into links to github.com. The hrefs come
+// from issueLinks(), which builds them from validated owner/repo/number only.
+function linkified(text) {
+  const nodes = [];
+  let pos = 0;
+  for (const { start, end, href } of issueLinks(text, state.owner, state.repo)) {
+    nodes.push(text.slice(pos, start), h("a", { href, target: "_blank", rel: "noopener noreferrer" }, text.slice(start, end)));
+    pos = end;
+  }
+  nodes.push(text.slice(pos));
+  return nodes;
 }
 
 // Children are appended as text nodes; nothing here parses HTML.

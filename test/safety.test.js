@@ -6,6 +6,7 @@ import {
   cleanTrailer,
   closingRefs,
   extractRefs,
+  issueLinks,
   stripInvisible,
   validPullRef,
 } from "../src/safety.js";
@@ -96,4 +97,18 @@ test("reference extraction stays fast on hostile input", () => {
   closingRefs(hostile, "whatwg", "html");
   stripInvisible(hostile);
   assert.ok(performance.now() - start < 1000);
+});
+
+test("issueLinks builds github.com URLs from validated parts only", () => {
+  const text = "Supersedes #9457 and whatwg/dom#1185; see evil_org/x#1, a#b#2, javascript:alert(1)#3 and https://evil.example/#4.";
+  const links = issueLinks(text, "whatwg", "html");
+  assert.deepEqual(
+    links.map((l) => [text.slice(l.start, l.end), l.href]),
+    [
+      ["#9457", "https://github.com/whatwg/html/issues/9457"],
+      ["whatwg/dom#1185", "https://github.com/whatwg/dom/issues/1185"],
+      ["#3", "https://github.com/whatwg/html/issues/3"],
+    ],
+  );
+  for (const { href } of links) assert.match(href, /^https:\/\/github\.com\/[A-Za-z0-9-]+\/[A-Za-z0-9._-]+\/issues\/\d+$/);
 });

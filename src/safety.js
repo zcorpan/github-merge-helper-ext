@@ -69,6 +69,19 @@ export function extractRefs(text, owner, repo) {
   return refs;
 }
 
+// Issue references ("#N", "owner/repo#N") in text, with GitHub URLs built from
+// the validated parts. Used to link them in the panel; other URLs in model
+// output are never turned into links.
+export function issueLinks(text, owner, repo) {
+  const links = [];
+  for (const m of text.matchAll(ISSUE_PATTERN)) {
+    const [, refOwner = owner, refRepo = repo, number] = m[1].match(/^(?:([^/]+)\/([^#]+))?#(\d+)$/);
+    if (!validPullRef(refOwner, refRepo, Number(number))) continue;
+    links.push({ start: m.index, end: m.index + m[1].length, href: `https://github.com/${refOwner}/${refRepo}/issues/${number}` });
+  }
+  return links;
+}
+
 // What GitHub will close when this message lands on the default branch.
 export function closingRefs(text, owner, repo) {
   const refs = new Set();
