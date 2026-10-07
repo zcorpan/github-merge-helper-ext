@@ -15,11 +15,12 @@ The button is there whenever GitHub shows a merge button, even while GitHub has 
 
 ## Rules
 
-Rules for these repositories are built in ([`src/rules.js`](src/rules.js)):
+Rules for these repositories are built in ([`src/rules.js`](src/rules.js)), calibrated against recent commit history (excluding exports from browser engines):
 
-- `whatwg/*`: [WHATWG committer guidelines](https://github.com/whatwg/meta/blob/main/COMMITTING.md) (prefixes, closing keywords only for resolved issues, `Tests:` lines, a coherent squash description).
-- `web-platform-tests/wpt`: the common rules, keeping `[area]` title prefixes.
-- All repositories: title ≤72 characters, imperative mood, no trailing period, no PR reference in the title, short body (often none), code in backticks, nothing invented.
+- `whatwg/*`: [WHATWG committer guidelines](https://github.com/whatwg/meta/blob/main/COMMITTING.md) as applied in practice (`Editorial: `/`Meta: ` prefixes, closing keywords only for resolved issues, a coherent squash description).
+- `web-platform-tests/wpt`: no formal policy; short or no descriptions, area prefixes like `HTML parser:` or `[css-grid]`.
+
+Reviewing a contributor's message is lenient: a long description that's substance, titles a bit over 72 characters, backticks or not, `Fixes` or `Closes`, and no `Tests:` line are all fine. It flags real problems: padded or AI-style verbose text, PR template or GitHub squash leftovers, a title that doesn't describe the change or has a PR reference, and missing or wrong issue references. Messages the extension writes itself follow a stricter, shorter style: title at most 72 characters, short rationale-focused description, nothing invented.
 
 For other repositories it also fetches `CONTRIBUTING.md` (root, `.github/`, or `docs/`) and applies what it says about commit messages. You can add your own instructions in the settings.
 
