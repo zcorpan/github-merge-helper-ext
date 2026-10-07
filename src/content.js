@@ -350,7 +350,7 @@ function updatePanelControls() {
     } else if (method !== "squash" && suggestion.verdict === "needs_changes") {
       text = "Choose “Squash and merge” to use the fixed message, or amend the commit.";
     } else if (method === "squash") {
-      text = "Click “Squash and merge”, then “Fill in commit message”.";
+      text = "Click “Squash and merge”, then “Fill in”.";
     }
   }
   setText(hint, text);
