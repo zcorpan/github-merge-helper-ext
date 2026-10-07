@@ -1,5 +1,13 @@
 // Adds a button next to GitHub's merge button that asks Claude to review or
 // write the commit message. Nothing happens until the button is clicked.
+//
+// Security: the model's answer is untrusted (PR text can contain prompt
+// injection). It is only ever inserted as text (never as HTML), only put into
+// GitHub's commit form fields (never submitted; you confirm the merge), and
+// checked by safety.js for closing keywords, unexpected references, and
+// invisible characters. Clicks synthesized by page scripts are ignored.
+
+import { checkMessage, cleanTrailer, stripInvisible, validPullRef } from "./safety.js";
 
 const MERGE_LABEL =
   /^(?:Merge pull request|Squash and merge|Rebase and merge|Enable auto-merge(?: \(\w+\))?|Confirm (?:merge|squash and merge|rebase and merge|auto-merge(?: \(\w+\))?))$/i;
@@ -7,6 +15,9 @@ const MERGEBOX_TEXT =
   /This branch has no conflicts with the base branch|Merging is blocked|This branch has conflicts that must be resolved|can be automatically merged|Merging can be performed automatically/;
 const NO_WRITE_ACCESS_TEXT = /Only those with write access to this repository can merge/;
 const PR_PATH = /^\/([^/]+)\/([^/]+)\/pull\/(\d+)\/?$/;
+// Where GitHub renders user-written content; never treat buttons or fields in
+// there as part of the merge box.
+const USER_CONTENT = ".markdown-body, .comment-body, .js-comment-body, .comment-form-textarea, [data-testid='markdown-body']";
 
 let state = null;
 let warnTimer = null;
@@ -23,7 +34,7 @@ function check() {
     state?.panel?.remove();
     clearTimeout(warnTimer);
     warnTimer = null;
-    state = match ? freshState(location.pathname, match) : null;
+    state = match && validPullRef(match[1], match[2], Number(match[3])) ? freshState(location.pathname, match) : null;
   }
   if (!state) return;
 
@@ -46,12 +57,20 @@ function check() {
   if (state.panel) updatePanelControls();
 }
 
+// Exactly one visible merge button outside user content, or null.
 function findMergeButton() {
-  for (const b of document.querySelectorAll("button")) {
-    if (b.classList.contains("gmh-button")) continue;
-    if (MERGE_LABEL.test(normalized(b.textContent)) && b.getClientRects().length) return b;
+  const found = [...document.querySelectorAll("button")].filter(
+    (b) =>
+      !b.classList.contains("gmh-button") &&
+      !b.closest(`.gmh-panel, ${USER_CONTENT}`) &&
+      MERGE_LABEL.test(normalized(b.textContent)) &&
+      b.getClientRects().length,
+  );
+  if (found.length > 1 && !state.warnedAmbiguous) {
+    state.warnedAmbiguous = true;
+    console.warn("[GitHub Merge Helper] Found more than one merge button; not adding anything.");
   }
-  return null;
+  return found.length === 1 ? found[0] : null;
 }
 
 function isDisabled(button) {
@@ -78,19 +97,23 @@ function isConfirming(merge) {
   return /^confirm /i.test(normalized(merge.textContent));
 }
 
-// Title input and description textarea of the open commit editor, if any.
+// Title input and description textarea of the open commit editor, if any:
+// the closest ancestor of the confirm button with exactly one visible text
+// input and one visible textarea, none of them in user content or a comment form.
 function commitFields(merge) {
   if (!isConfirming(merge)) return null;
+  const usable = (el) => el.getClientRects().length && !el.closest(`.gmh-panel, ${USER_CONTENT}`);
   const classicTitle = document.getElementById("merge_title_field");
   const classicBody = document.getElementById("merge_message_field");
-  if (classicTitle?.getClientRects().length && classicBody) return { title: classicTitle, body: classicBody };
-  let el = merge;
-  for (let i = 0; i < 8 && el; i++, el = el.parentElement) {
-    const title = [...el.querySelectorAll('input[type="text"], input:not([type])')].find(
-      (i) => i.getClientRects().length && !i.closest(".gmh-panel"),
-    );
-    const body = [...el.querySelectorAll("textarea")].find((t) => t.getClientRects().length && !t.closest(".gmh-panel"));
-    if (title && body) return { title, body };
+  if (classicTitle && classicBody && usable(classicTitle) && usable(classicBody)) return { title: classicTitle, body: classicBody };
+  let el = merge.parentElement;
+  for (let i = 0; i < 6 && el && el !== document.body; i++, el = el.parentElement) {
+    const titles = [...el.querySelectorAll('input[type="text"], input:not([type])')].filter(usable);
+    const bodies = [...el.querySelectorAll("textarea")].filter(usable);
+    if (titles.length + bodies.length === 0) continue;
+    if (titles.length !== 1 || bodies.length !== 1) return null;
+    if (el.querySelector("#new_comment_field, form.js-new-comment-form")) return null;
+    return { title: titles[0], body: bodies[0] };
   }
   return null;
 }
@@ -104,7 +127,7 @@ function pageCommitCount() {
 }
 
 function buttonLabel(merge) {
-  if (state.result && canFill(merge) && !state.filled) return "Fill in commit message";
+  if (state.result && canFill(merge) && !state.filled && !currentChecks()?.warnings) return "Fill in commit message";
   const count = state.result?.commitCount ?? pageCommitCount();
   if (count === 1) return "Review commit message";
   if (count > 1) return "Write squash commit message";
@@ -137,7 +160,7 @@ function maybeWarn() {
 
 function createButton() {
   const button = h("button", { type: "button", className: "gmh-button" });
-  button.addEventListener("click", onButtonClick);
+  onClick(button, onButtonClick);
   return button;
 }
 
@@ -148,7 +171,7 @@ async function onButtonClick() {
   // any edits made in the panel. Otherwise ask the background, which reuses its
   // cached answer while the PR head is unchanged.
   if (state.result && state.panel?.gmh) {
-    if (canFill(merge)) fill(merge);
+    if (canFill(merge) && !currentChecks()?.warnings) fill(merge);
     state.panel.scrollIntoView({ block: "nearest" });
     return;
   }
@@ -173,7 +196,7 @@ async function request(merge, force) {
   } else {
     s.result = response;
     showResult(merge);
-    if (canFill(merge)) fill(merge);
+    if (canFill(merge) && !currentChecks()?.warnings) fill(merge);
   }
   check();
 }
@@ -199,7 +222,7 @@ function showError(merge, { error, needsSettings }) {
   const children = [h("p", { className: "gmh-error" }, error)];
   if (needsSettings) {
     const link = h("button", { type: "button", className: "gmh-link" }, "Open settings");
-    link.addEventListener("click", () => browser.runtime.sendMessage({ type: "openOptions" }));
+    onClick(link, () => browser.runtime.sendMessage({ type: "openOptions" }));
     children.push(link);
   }
   replacePanel(merge, h("div", { className: "gmh-panel" }, closeButton(), ...children));
@@ -216,27 +239,31 @@ function showResult(merge) {
 
   const title = h("input", { type: "text", className: "gmh-title", value: suggestion.title, spellcheck: true });
   const counter = h("span", { className: "gmh-counter" });
-  const updateCounter = () => {
-    setText(counter, `${title.value.length}/72`);
-    counter.classList.toggle("gmh-over", title.value.length > 72);
-  };
-  title.addEventListener("input", updateCounter);
-  updateCounter();
   const body = h("textarea", { className: "gmh-body", rows: 6, spellcheck: true });
   body.value = suggestion.body;
+  const checks = h("div", { className: "gmh-checks" });
+  const onEdit = () => {
+    setText(counter, `${title.value.length}/72`);
+    counter.classList.toggle("gmh-over", title.value.length > 72);
+    renderChecks(checks);
+    check();
+  };
+  title.addEventListener("input", onEdit);
+  body.addEventListener("input", onEdit);
 
   const fillButton = h("button", { type: "button", className: "gmh-action gmh-fill" }, "Fill in");
-  fillButton.addEventListener("click", () => fill(findMergeButton()));
+  onClick(fillButton, () => fill(findMergeButton()));
   const undoButton = h("button", { type: "button", className: "gmh-action gmh-undo" }, "Undo");
-  undoButton.addEventListener("click", undo);
+  onClick(undoButton, undo);
   const copyButton = h("button", { type: "button", className: "gmh-action" }, "Copy");
-  copyButton.addEventListener("click", async () => {
-    await navigator.clipboard.writeText(composeMessage(title.value, body.value, trailers));
+  onClick(copyButton, async () => {
+    const message = finalMessage(title.value, body.value, trailers);
+    await navigator.clipboard.writeText([message.title, message.body].filter(Boolean).join("\n\n"));
     setText(copyButton, "Copied");
     setTimeout(() => setText(copyButton, "Copy"), 1500);
   });
   const regenerateButton = h("button", { type: "button", className: "gmh-action" }, "Regenerate");
-  regenerateButton.addEventListener("click", () => request(findMergeButton(), true));
+  onClick(regenerateButton, () => request(findMergeButton(), true));
 
   const panel = h(
     "div",
@@ -245,19 +272,49 @@ function showResult(merge) {
     h("h3", { className: `gmh-heading gmh-${suggestion.verdict}` }, heading),
     suggestion.issues.length ? h("ul", { className: "gmh-issues" }, ...suggestion.issues.map((i) => h("li", {}, i))) : null,
     suggestion.notes ? h("p", { className: "gmh-notes" }, suggestion.notes) : null,
-    h("p", { className: "gmh-hint" }),
     diffTruncated ? h("p", { className: "gmh-notes" }, "The diff was too large and was truncated before sending.") : null,
     h("label", { className: "gmh-label" }, "Title ", counter),
     title,
     h("label", { className: "gmh-label" }, "Description"),
     body,
     trailers.length ? h("p", { className: "gmh-trailers" }, `Added on fill/copy: ${trailers.join(", ")}`) : null,
+    checks,
+    h("p", { className: "gmh-hint" }),
     h("div", { className: "gmh-actions" }, fillButton, copyButton, regenerateButton, undoButton),
-    h("p", { className: "gmh-model" }, model),
+    h("p", { className: "gmh-model" }, `${model}. Claude's answer can be influenced by text in the PR; read it before merging.`),
   );
   panel.gmh = { title, body, fillButton, undoButton };
   replacePanel(merge, panel);
-  updatePanelControls();
+  onEdit();
+}
+
+// Problems found by safety.js (not by the model) in the panel's current text.
+function currentChecks() {
+  const controls = state.panel?.gmh;
+  if (!controls || !state.result) return null;
+  const { title, body } = controls;
+  const result = checkMessage({ title: title.value, body: body.value }, state.result.knownRefs, state.owner, state.repo);
+  const invisible = stripInvisible(title.value).removed + stripInvisible(body.value).removed;
+  result.removed = state.result.removedChars + invisible;
+  result.warnings = result.unknown.length > 0 || result.removed > 0;
+  return result;
+}
+
+function renderChecks(container) {
+  const result = currentChecks();
+  if (!result) return;
+  const items = [
+    h("li", {}, result.closes.length ? `Merging closes ${result.closes.join(", ")}.` : "Merging closes no issues."),
+  ];
+  if (result.unknown.length) {
+    items.push(
+      h("li", { className: "gmh-warning" }, `Not in the PR title, description, or commits: ${result.unknown.join(", ")}. Check these are legitimate.`),
+    );
+  }
+  if (result.removed) {
+    items.push(h("li", { className: "gmh-warning" }, `${result.removed} invisible or control character(s) were or will be removed.`));
+  }
+  container.replaceChildren(h("p", { className: "gmh-checks-heading" }, "Checked by the extension, not by Claude:"), h("ul", {}, ...items));
 }
 
 function updatePanelControls() {
@@ -270,7 +327,9 @@ function updatePanelControls() {
   const hint = state.panel.querySelector(".gmh-hint");
   const { mode, suggestion } = state.result;
   let text = "";
-  if (!fillable && merge) {
+  if (fillable && !state.filled && currentChecks()?.warnings) {
+    text = "Not filled in automatically because of the warnings above. Review, then click “Fill in”.";
+  } else if (!fillable && merge) {
     const method = mergeMethod(merge);
     if (method !== "squash" && mode === "generate") {
       text = "This PR has several commits. Choose “Squash and merge” to use this message.";
@@ -284,14 +343,16 @@ function updatePanelControls() {
   hint.hidden = !text;
 }
 
+// Only puts text in GitHub's form; never submits it.
 function fill(merge) {
   const fields = merge && commitFields(merge);
   const controls = state.panel?.gmh;
   if (!fields || !controls) return;
   const original = { title: fields.title.value, body: fields.body.value };
   const existing = original.body.split("\n").filter((l) => /^co-authored-by:/i.test(l.trim()));
-  setNativeValue(fields.title, controls.title.value.trim());
-  setNativeValue(fields.body, composeBody(controls.body.value, [...existing, ...state.result.trailers]));
+  const message = finalMessage(controls.title.value, controls.body.value, [...existing, ...state.result.trailers]);
+  setNativeValue(fields.title, message.title);
+  setNativeValue(fields.body, message.body);
   state.filled ??= original;
   check();
 }
@@ -305,21 +366,23 @@ function undo() {
   check();
 }
 
-function composeBody(body, trailers) {
+// Title and body as they will be filled in: invisible characters stripped,
+// well-formed trailers only, deduped by email.
+function finalMessage(title, body, trailers) {
   const seen = new Set();
   const unique = [];
   for (const t of trailers) {
-    const line = t.trim();
-    const key = (line.match(/<([^>]+)>/)?.[1] ?? line).toLowerCase();
+    const line = cleanTrailer(t);
+    if (!line) continue;
+    const key = line.match(/<([^>]+)>$/)[1].toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    unique.push(line.replace(/^co-authored-by:/i, "Co-authored-by:"));
+    unique.push(line);
   }
-  return [body.trim(), unique.join("\n")].filter(Boolean).join("\n\n");
-}
-
-function composeMessage(title, body, trailers) {
-  return [title.trim(), composeBody(body, trailers)].filter(Boolean).join("\n\n");
+  return {
+    title: stripInvisible(title).text.replace(/\n/g, " ").trim(),
+    body: [stripInvisible(body).text.trim(), unique.join("\n")].filter(Boolean).join("\n\n"),
+  };
 }
 
 // React tracks input values; use the native setter so it notices the change.
@@ -332,13 +395,22 @@ function setNativeValue(el, value) {
 
 function closeButton() {
   const button = h("button", { type: "button", className: "gmh-close", title: "Close" }, "×");
-  button.addEventListener("click", () => {
+  onClick(button, () => {
     state.panel?.remove();
     state.panel = null;
   });
   return button;
 }
 
+// Ignore clicks synthesized by page scripts, so the page can't spend your API
+// credit or fill in the form.
+function onClick(el, handler) {
+  el.addEventListener("click", (event) => {
+    if (event.isTrusted) handler(event);
+  });
+}
+
+// Children are appended as text nodes; nothing here parses HTML.
 function h(tag, props, ...children) {
   const el = Object.assign(document.createElement(tag), props);
   for (const child of children) if (child != null) el.append(child);

@@ -5,6 +5,7 @@
   "scripts": {
     "build": "node build.mjs",
     "watch": "node build.mjs --watch",
+    "test": "node --test \"test/*.test.js\"",
     "lint": "npm run build && web-ext lint -s dist",
     "package": "npm run build && web-ext build -s dist --overwrite-dest",
     "start": "npm run build && web-ext run -s dist -f nightly --start-url https://github.com/whatwg/html/pulls"

@@ -143,3 +143,26 @@
   line-height: 1;
   color: var(--fgColor-muted, #59636e);
 }
+
+.gmh-checks {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: var(--bgColor-muted, #f6f8fa);
+  border-radius: 6px;
+}
+
+.gmh-checks-heading {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fgColor-muted, #59636e);
+}
+
+.gmh-checks ul {
+  margin: 0 !important;
+  padding-inline-start: 20px;
+}
+
+.gmh-warning {
+  font-weight: 600;
+  color: var(--fgColor-attention, #9a6700);
+}

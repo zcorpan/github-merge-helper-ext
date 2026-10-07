@@ -8,20 +8,39 @@
       "id": "github-merge-helper@zcorpan",
       "strict_min_version": "142.0",
       "data_collection_permissions": {
-        "required": ["websiteContent"]
+        "required": [
+          "websiteContent"
+        ]
       }
     }
   },
-  "permissions": ["storage", "clipboardWrite"],
-  "host_permissions": ["https://api.anthropic.com/*", "https://api.github.com/*"],
+  "permissions": [
+    "storage",
+    "clipboardWrite"
+  ],
+  "host_permissions": [
+    "https://api.anthropic.com/*",
+    "https://api.github.com/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://api.anthropic.com https://api.github.com; base-uri 'none'; form-action 'none'"
+  },
   "background": {
-    "scripts": ["background.js"]
+    "scripts": [
+      "background.js"
+    ]
   },
   "content_scripts": [
     {
-      "matches": ["https://github.com/*"],
-      "js": ["content.js"],
-      "css": ["content.css"]
+      "matches": [
+        "https://github.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ]
     }
   ],
   "options_ui": {
