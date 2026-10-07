@@ -1,5 +1,5 @@
 import { OUTPUT_SCHEMA, buildSystemPrompt, buildUserMessage, cleanDescription, repoRules } from "./rules.js";
-import { cleanSuggestion, cleanTrailer, extractRefs, stripInvisible, validPullRef } from "./safety.js";
+import { MAX_BODY_CHARS, MAX_TITLE_CHARS, cleanSuggestion, cleanTrailer, extractRefs, stripInvisible, validPullRef } from "./safety.js";
 import { DEFAULTS } from "./defaults.js";
 
 // Name of the native messaging host installed by native/install.py, which holds
@@ -13,8 +13,15 @@ const cache = new Map();
 // Requests in progress, by the same key, so repeated clicks don't pay twice.
 const inflight = new Map();
 
+// Results are also saved per PR, so the panel comes back after switching tabs
+// or revisiting the PR. Dropped after 30 days, when the PR is no longer open,
+// or when the panel is closed.
+const SAVED_PREFIX = "pr:";
+const SAVED_MAX_AGE = 30 * 24 * 60 * 60 * 1000;
+
 // Earlier versions stored the API key here; it now lives in the OS keychain.
 browser.storage.local.remove("apiKey");
+pruneSaved();
 
 browser.runtime.onMessage.addListener((message, sender) => {
   if (sender.id !== browser.runtime.id) return undefined;
@@ -22,15 +29,18 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message?.type === "testConnection" && sender.url === browser.runtime.getURL("options.html")) {
     return callHost({ type: "ping" }).then(() => ({ ok: true }), (e) => ({ error: describeError(e) }));
   }
-  // Only our own content script on github.com may ask for suggestions.
+  // Only our own content script on github.com may ask for anything else.
   if (!sender.tab?.url?.startsWith("https://github.com/")) return undefined;
   if (message?.type === "openOptions") return browser.runtime.openOptionsPage();
-  if (message?.type === "suggest") {
-    const { owner, repo, number, force } = message;
-    if (!validPullRef(owner, repo, number)) return Promise.resolve({ error: "Invalid pull request reference." });
-    const key = `${owner}/${repo}#${number}`;
+  const { owner, repo, number } = message ?? {};
+  if (!validPullRef(owner, repo, number)) return Promise.resolve({ error: "Invalid pull request reference." });
+  const key = `${owner}/${repo}#${number}`;
+  if (message.type === "restore") return restoreSaved({ owner, repo, number, key }).catch(() => null);
+  if (message.type === "saveEdits") return saveEdits(key, message.title, message.body).catch(() => undefined);
+  if (message.type === "forget") return browser.storage.local.remove(SAVED_PREFIX + key);
+  if (message.type === "suggest") {
     if (inflight.has(key)) return inflight.get(key);
-    const promise = suggest({ owner, repo, number, force: force === true })
+    const promise = suggest({ owner, repo, number, force: message.force === true })
       .catch((e) => ({ error: describeError(e), needsSettings: e.needsSetup === true }))
       .finally(() => inflight.delete(key));
     inflight.set(key, promise);
@@ -39,15 +49,22 @@ browser.runtime.onMessage.addListener((message, sender) => {
   return undefined;
 });
 
-async function suggest({ owner, repo, number, force }) {
-  const settings = { ...DEFAULTS, ...(await browser.storage.local.get(null)) };
-
+function githubFor(settings, owner, repo) {
   const api = (path, accept) => githubFetch(`https://api.github.com${path}`, settings.githubToken, accept);
   const gh = (path, accept) => api(`/repos/${owner}/${repo}${path}`, accept);
+  return { api, gh };
+}
+
+async function suggest({ owner, repo, number, force }) {
+  const settings = await browser.storage.local.get(DEFAULTS);
+  const { api, gh } = githubFor(settings, owner, repo);
   const pr = await (await gh(`/pulls/${number}`)).json();
   const key = `${owner}/${repo}#${number}`;
   const cached = cache.get(key);
-  if (!force && cached?.headSha === pr.head.sha) return cached.response;
+  if (!force && cached?.headSha === pr.head.sha) {
+    await save(key, pr.head.sha, cached.response, { keepEdits: true });
+    return cached.response;
+  }
 
   const [commits, diffText, contributing] = await Promise.all([
     fetchCommits(gh, number),
@@ -118,7 +135,78 @@ async function suggest({ owner, repo, number, force }) {
     model: String(response.model),
   };
   cache.set(key, { headSha: pr.head.sha, response: result });
+  await save(key, pr.head.sha, result, { keepEdits: false });
   return result;
+}
+
+async function save(key, headSha, result, { keepEdits }) {
+  const storageKey = SAVED_PREFIX + key;
+  const previous = keepEdits ? (await browser.storage.local.get(storageKey))[storageKey] : null;
+  const edits = previous?.headSha === headSha ? (previous.edits ?? null) : null;
+  await browser.storage.local.set({ [storageKey]: { headSha, savedAt: Date.now(), result, edits } });
+}
+
+// The saved result for a PR that's still open, re-validated, with any edits
+// made in the panel and whether the PR has new commits since. One GitHub API
+// request, no Claude request.
+async function restoreSaved({ owner, repo, number, key }) {
+  const storageKey = SAVED_PREFIX + key;
+  const entry = (await browser.storage.local.get(storageKey))[storageKey];
+  if (!entry) return null;
+  const forget = () => browser.storage.local.remove(storageKey).then(() => null);
+  if (!(Date.now() - entry.savedAt < SAVED_MAX_AGE)) return forget();
+
+  let result;
+  try {
+    const { result: r } = entry;
+    const { suggestion } = cleanSuggestion(r.suggestion);
+    if (!["review", "generate"].includes(r.mode) || !Array.isArray(r.knownRefs) || !Array.isArray(r.trailers)) throw new Error();
+    result = {
+      suggestion,
+      removedChars: Number(r.removedChars) || 0,
+      knownRefs: r.knownRefs.filter((ref) => typeof ref === "string"),
+      mode: r.mode,
+      commitCount: Number(r.commitCount) || 0,
+      trailers: r.trailers.map(cleanTrailer).filter(Boolean),
+      diffTruncated: r.diffTruncated === true,
+      model: String(r.model),
+    };
+  } catch {
+    return forget();
+  }
+
+  let stale = false;
+  try {
+    const settings = await browser.storage.local.get(DEFAULTS);
+    const pr = await (await githubFor(settings, owner, repo).gh(`/pulls/${number}`)).json();
+    if (pr.state !== "open") return forget();
+    stale = pr.head.sha !== entry.headSha;
+    if (!stale) cache.set(key, { headSha: entry.headSha, response: result });
+  } catch {
+    // Offline or rate-limited: show it anyway.
+  }
+  return { ...result, edits: validEdits(entry.edits), stale };
+}
+
+function validEdits(edits) {
+  const { title, body } = edits ?? {};
+  if (typeof title !== "string" || typeof body !== "string") return null;
+  if (title.length > MAX_TITLE_CHARS || body.length > MAX_BODY_CHARS) return null;
+  return { title, body };
+}
+
+async function saveEdits(key, title, body) {
+  const edits = validEdits({ title, body });
+  const storageKey = SAVED_PREFIX + key;
+  const entry = (await browser.storage.local.get(storageKey))[storageKey];
+  if (!edits || !entry) return;
+  await browser.storage.local.set({ [storageKey]: { ...entry, edits, savedAt: Date.now() } });
+}
+
+async function pruneSaved() {
+  const all = await browser.storage.local.get(null);
+  const old = Object.keys(all).filter((k) => k.startsWith(SAVED_PREFIX) && !(Date.now() - all[k]?.savedAt < SAVED_MAX_AGE));
+  if (old.length) await browser.storage.local.remove(old);
 }
 
 class HostError extends Error {

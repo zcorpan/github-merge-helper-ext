@@ -4,8 +4,7 @@ const form = document.getElementById("settings");
 const status = document.getElementById("status");
 const testStatus = document.getElementById("test-status");
 
-browser.storage.local.get(null).then((stored) => {
-  const settings = { ...DEFAULTS, ...stored };
+browser.storage.local.get(DEFAULTS).then((settings) => {
   for (const name of Object.keys(DEFAULTS)) form.elements[name].value = settings[name];
 });
 

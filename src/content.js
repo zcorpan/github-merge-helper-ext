@@ -14,7 +14,8 @@ const MERGE_LABEL =
 const MERGEBOX_TEXT =
   /This branch has no conflicts with the base branch|Merging is blocked|This branch has conflicts that must be resolved|can be automatically merged|Merging can be performed automatically/;
 const NO_WRITE_ACCESS_TEXT = /Only those with write access to this repository can merge/;
-const PR_PATH = /^\/([^/]+)\/([^/]+)\/pull\/(\d+)\/?$/;
+// Any tab of a PR; the merge box is only on the Conversation tab (no 4th part).
+const PR_PATH = /^\/([^/]+)\/([^/]+)\/pull\/(\d+)(\/[^/]+.*)?\/?$/;
 // Where GitHub renders user-written content; never treat buttons or fields in
 // there as part of the merge box.
 const USER_CONTENT = ".markdown-body, .comment-body, .js-comment-body, .comment-form-textarea, [data-testid='markdown-body']";
@@ -52,39 +53,60 @@ function handleStale() {
   return true;
 }
 
-function freshState(path, [, owner, repo, number]) {
-  return { path, owner, repo, number: Number(number), result: null, loading: false, filled: null, button: null, panel: null,
+// State is per PR (not per tab of it), so the panel survives switching to
+// "Files changed" and back.
+function freshState(key, owner, repo, number) {
+  return { key, owner, repo, number, result: null, loading: false, filled: null, button: null, panel: null,
     pageCommitCount: null, warned: false, noWriteAccess: false, lastScan: 0 };
 }
 
 function check() {
   const match = location.pathname.match(PR_PATH);
-  if (state?.path !== location.pathname) {
-    // Navigated away: drop our elements, and any a previous version left.
+  const pr = match && validPullRef(match[1], match[2], Number(match[3])) ? { owner: match[1], repo: match[2], number: Number(match[3]) } : null;
+  const key = pr && `${pr.owner}/${pr.repo}#${pr.number}`;
+  if (state?.key !== key) {
+    // Another PR, or not a PR: drop our elements, and any a previous version left.
     if (state) for (const el of document.querySelectorAll(OUR_ELEMENTS)) el.remove();
     clearTimeout(warnTimer);
     warnTimer = null;
-    state = match && validPullRef(match[1], match[2], Number(match[3])) ? freshState(location.pathname, match) : null;
+    state = pr ? freshState(key, pr.owner, pr.repo, pr.number) : null;
+    if (state) restore(state);
   }
-  if (!state || handleStale()) return;
+  if (!state || match[4] || handleStale()) return;
 
+  // The button is there whenever the merge button is, even while GitHub has it
+  // disabled (e.g. while checking mergeability).
   const merge = findMergeButton();
-  if (!merge || isDisabled(merge)) {
+  if (merge) {
+    clearTimeout(warnTimer);
+    warnTimer = null;
+    const button = (state.button ??= createButton());
+    const group = buttonGroup(merge);
+    if (button.previousElementSibling !== group) group.after(button);
+    setText(button, state.loading ? "Asking Claude…" : buttonLabel(merge));
+    button.disabled = state.loading;
+  } else {
     state.button?.remove();
-    if (!merge) maybeWarn();
-    return;
+    maybeWarn();
   }
-  clearTimeout(warnTimer);
-  warnTimer = null;
 
-  const button = (state.button ??= createButton());
-  const group = buttonGroup(merge);
-  if (button.previousElementSibling !== group) group.after(button);
-  setText(button, state.loading ? "Asking Claude…" : buttonLabel(merge));
-  button.disabled = state.loading;
-
+  // GitHub re-renders the merge box at times; put the panel back when it does.
   if (state.panel && !state.panel.isConnected) placePanel(merge, state.panel);
   if (state.panel) updatePanelControls();
+}
+
+// A saved result for this PR, from an earlier visit or another tab.
+async function restore(s) {
+  let saved = null;
+  try {
+    saved = await browser.runtime.sendMessage({ type: "restore", owner: s.owner, repo: s.repo, number: s.number });
+  } catch {
+    return;
+  }
+  if (state !== s || !saved || saved.error || s.result || s.loading) return;
+  s.result = saved;
+  showResult(findMergeButton(), saved.edits);
+  check();
 }
 
 // Exactly one visible merge button outside user content, or null.
@@ -101,10 +123,6 @@ function findMergeButton() {
     console.warn("[GitHub Merge Helper] Found more than one merge button; not adding anything.");
   }
   return found.length === 1 ? found[0] : null;
-}
-
-function isDisabled(button) {
-  return button.disabled || button.getAttribute("aria-disabled") === "true";
 }
 
 // The merge button usually sits in a split-button group (or next to Cancel when
@@ -237,14 +255,20 @@ async function request(merge, force) {
   check();
 }
 
-// Below the merge box, as its sibling. Falls back to walking up out of
-// flex/grid rows so the panel gets its own full-width block.
+// Below the merge box, as its sibling, even if the merge button is gone for
+// the moment. Falls back to walking up from the merge button out of flex/grid
+// rows so the panel gets its own full-width block. Returns whether it placed it.
 function placePanel(merge, panel) {
-  const box = merge.closest('[data-testid="mergebox-border-container"]');
-  if (box) {
-    box.after(panel);
-    return;
+  const placed = () => {
+    panel.gmh?.resize();
+    return true;
+  };
+  const boxes = [...document.querySelectorAll('[data-testid="mergebox-border-container"]')].filter((b) => !b.closest(USER_CONTENT));
+  if (boxes.length === 1) {
+    boxes[0].after(panel);
+    return placed();
   }
+  if (!merge) return false;
   let el = buttonGroup(merge);
   for (let i = 0; i < 10 && el.parentElement && el.parentElement !== document.body; i++) {
     const display = getComputedStyle(el.parentElement).display;
@@ -252,6 +276,7 @@ function placePanel(merge, panel) {
     el = el.parentElement;
   }
   el.after(panel);
+  return placed();
 }
 
 function replacePanel(merge, panel) {
@@ -271,8 +296,10 @@ function showError(merge, { error, needsSettings }) {
   replacePanel(merge, h("div", { className: "gmh-panel" }, closeButton(), ...children));
 }
 
-function showResult(merge) {
-  const { suggestion, mode, diffTruncated, model, trailers } = state.result;
+// edits: the panel's title and description as last edited (when restored).
+function showResult(merge, edits = null) {
+  const s = state;
+  const { suggestion, mode, diffTruncated, model, trailers, stale } = s.result;
   const heading =
     mode === "generate"
       ? "Suggested squash commit message"
@@ -280,22 +307,38 @@ function showResult(merge) {
         ? "Commit message looks good"
         : "Commit message needs changes";
 
-  const title = h("input", { type: "text", className: "gmh-title", value: suggestion.title, spellcheck: true });
+  const title = h("input", { type: "text", className: "gmh-title", value: edits?.title ?? suggestion.title, spellcheck: true });
   const counter = h("span", { className: "gmh-counter" });
   const body = h("textarea", { className: "gmh-body", rows: 6, spellcheck: true });
-  body.value = suggestion.body;
+  body.value = edits?.body ?? suggestion.body;
   const checks = h("div", { className: "gmh-checks" });
-  const onEdit = () => {
-    // Grow the description to fit (CSS caps the height).
+  // Grow the description to fit (CSS caps the height). Only works while the
+  // panel is in the page, so placePanel() calls it again.
+  const resize = () => {
+    if (!body.isConnected) return;
     body.style.height = "auto";
     body.style.height = `${body.scrollHeight + 2}px`;
+  };
+  const onEdit = () => {
+    resize();
     setText(counter, `${title.value.length}/72`);
     counter.classList.toggle("gmh-over", title.value.length > 72);
     renderChecks(checks);
     check();
   };
-  title.addEventListener("input", onEdit);
-  body.addEventListener("input", onEdit);
+  let saveTimer;
+  const saveEdits = () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      browser.runtime
+        .sendMessage({ type: "saveEdits", owner: s.owner, repo: s.repo, number: s.number, title: title.value, body: body.value })
+        .catch(() => {});
+    }, 500);
+  };
+  for (const field of [title, body]) {
+    field.addEventListener("input", onEdit);
+    field.addEventListener("input", saveEdits);
+  }
 
   const fillButton = h("button", { type: "button", className: "gmh-action gmh-fill" }, "Fill in");
   onClick(fillButton, () => fill(findMergeButton()));
@@ -318,6 +361,7 @@ function showResult(merge) {
     h("h3", { className: `gmh-heading gmh-${suggestion.verdict}` }, heading),
     suggestion.issues.length ? h("ul", { className: "gmh-issues" }, ...suggestion.issues.map((i) => h("li", {}, ...linkified(i)))) : null,
     suggestion.notes ? h("p", { className: "gmh-notes" }, ...linkified(suggestion.notes)) : null,
+    stale ? h("p", { className: "gmh-update-note" }, "This PR has new commits since this suggestion. Click “Regenerate” to update it.") : null,
     diffTruncated ? h("p", { className: "gmh-notes" }, "The diff was too large and was truncated before sending.") : null,
     h("label", { className: "gmh-label" }, "Title ", counter),
     title,
@@ -329,7 +373,7 @@ function showResult(merge) {
     h("div", { className: "gmh-actions" }, fillButton, copyButton, regenerateButton, undoButton),
     h("p", { className: "gmh-model" }, `${model}. Claude's answer can be influenced by text in the PR; read it before merging.`),
   );
-  panel.gmh = { title, body, fillButton, undoButton };
+  panel.gmh = { title, body, fillButton, undoButton, resize };
   replacePanel(merge, panel);
   onEdit();
 }
@@ -444,9 +488,11 @@ function setNativeValue(el, value) {
 
 function closeButton() {
   const button = h("button", { type: "button", className: "gmh-close", title: "Close" }, "×");
+  // Closing also forgets the saved result, so it doesn't come back next visit.
   onClick(button, () => {
     state.panel?.remove();
     state.panel = null;
+    browser.runtime.sendMessage({ type: "forget", owner: state.owner, repo: state.repo, number: state.number }).catch(() => {});
   });
   return button;
 }

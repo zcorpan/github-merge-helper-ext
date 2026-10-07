@@ -11,7 +11,7 @@ Requests to the Claude API go through a small local helper program (a [native me
 
 If GitHub's squash commit editor is open (you clicked "Squash and merge"), the message is filled in directly. Otherwise the button label changes to "Fill in commit message" once the editor is open. You can edit the suggestion in the panel, then use Fill in, Copy, Regenerate, or Undo (which restores what was in GitHub's form). Existing `Co-authored-by:` trailers are kept.
 
-There's no button when you can't merge (no write access, or the merge button is disabled). If the button should be there but the extension can't find GitHub's merge button (GitHub changed its markup), it logs a warning to the console.
+The button is there whenever GitHub shows a merge button, even while GitHub has it disabled (e.g. while checking whether the PR can be merged), so there's none without write access. If the button should be there but the extension can't find GitHub's merge button (GitHub changed its markup), it logs a warning to the console.
 
 ## Rules
 
@@ -88,7 +88,7 @@ In `about:addons`, click the `…` menu next to GitHub Merge Helper and choose "
 3. Click "Review commit message" or "Write squash commit message" next to the merge button.
 4. Read the panel, edit the message if needed, and fill it in if it wasn't filled in already. Then confirm the merge yourself as usual.
 
-Results are cached until the PR's head commit changes; "Regenerate" asks again.
+Once shown, the panel stays: when GitHub re-renders the merge box, when you switch to "Files changed" and back, and when you come back to the PR later, with any edits you made in it. Saved results are dropped when you close the panel (×), when the PR is merged or closed (checked on your next visit), or after 30 days. If the PR got new commits since, the panel says so; "Regenerate" asks again. A restored panel never fills in GitHub's form by itself.
 
 After you update the extension, open PR pages keep working with a lone button replaced. If a suggestion or error panel was showing, it stays readable but inactive, with a note to reload the page.
 
@@ -110,10 +110,10 @@ Anyone can open a PR, so the PR title, description, commit messages, author name
   If anything is flagged, the message isn't filled in automatically; you have to click "Fill in" after reading it.
 - **"Looks good" uses the real commit.** When the single commit's message passes review, the extension fills in the commit's own text, not the model's copy of it.
 - **Prompt hardening.** PR data is wrapped in a block delimited by a random per-request tag the PR can't forge, and the model is told to treat it as data and to mention in its notes any text aimed at it.
-- **Inputs are validated.** The owner, repository, and PR number taken from the URL are checked before building API URLs; the background script only accepts messages from the extension's own content script on github.com; clicks synthesized by page scripts are ignored, and concurrent requests for the same PR are merged so repeated clicks don't pay twice; untrusted text is size-capped and matched with linear-time patterns.
+- **Inputs are validated.** The owner, repository, and PR number taken from the URL are checked before building API URLs; the background script only accepts messages from the extension's own content script on github.com; saved results are re-validated when restored and never filled in without a click; clicks synthesized by page scripts are ignored, and concurrent requests for the same PR are merged so repeated clicks don't pay twice; untrusted text is size-capped and matched with linear-time patterns.
 
 What it can't prevent: a manipulated model writing a misleading or low-quality message, or a wrong verdict. Read the message before you merge, as you would without the extension. The model's issues and notes come from the model too, so they're only as trustworthy as the message.
 
 ## Privacy
 
-Clicking the button sends the PR's title, description, commit messages, and diff (capped at 300,000 characters) to the Anthropic API using your key, via the native helper. Settings are stored in `browser.storage.local` (not synced). The extension makes no other requests besides read-only requests to `api.github.com`.
+Clicking the button sends the PR's title, description, commit messages, and diff (capped at 300,000 characters) to the Anthropic API using your key, via the native helper. Settings, and the last result for each PR you used the extension on (the suggestion, your edits to it, and references from the PR, kept for up to 30 days as described in Usage), are stored in `browser.storage.local` (not synced). The extension makes no other requests besides read-only requests to `api.github.com`.
