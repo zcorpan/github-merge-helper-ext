@@ -61,6 +61,10 @@
   margin: 0 0 8px;
 }
 
+.gmh-panel > :last-child {
+  margin-bottom: 0;
+}
+
 .gmh-heading {
   margin: 0 24px 8px 0;
   font-size: 14px;
