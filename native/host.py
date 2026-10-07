@@ -82,7 +82,7 @@ def validated_params(params):
     if not isinstance(model, str) or not MODEL_PATTERN.match(model):
         raise InvalidRequest("Invalid model.")
     max_tokens = params.get("max_tokens")
-    if not isinstance(max_tokens, int) or not 1 <= max_tokens <= MAX_OUTPUT_TOKENS:
+    if type(max_tokens) is not int or not 1 <= max_tokens <= MAX_OUTPUT_TOKENS:
         raise InvalidRequest("Invalid max_tokens.")
     system = params.get("system")
     if not isinstance(system, str) or len(system) > MAX_SYSTEM_CHARS:

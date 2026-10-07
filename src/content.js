@@ -184,6 +184,7 @@ async function onButtonClick() {
 
 async function request(merge, force) {
   const s = state;
+  if (s.loading) return;
   s.loading = true;
   check();
   let response;

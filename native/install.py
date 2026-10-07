@@ -14,6 +14,7 @@ own prompt so it never appears in shell history or process arguments.
 import argparse
 import json
 import os
+import shlex
 import stat
 import subprocess
 import sys
@@ -69,11 +70,15 @@ def install():
         print(f"Creating virtualenv in {VENV_DIR}")
         subprocess.run([sys.executable, "-m", "venv", str(VENV_DIR)], check=True)
     python = VENV_DIR / "bin" / "python"
-    subprocess.run([str(python), "-I", "-m", "pip", "install", "--quiet", "-r", str(NATIVE_DIR / "requirements.txt")], check=True)
+    # Exact versions, and wheels only so no package build code runs at install time.
+    subprocess.run(
+        [str(python), "-I", "-m", "pip", "install", "--quiet", "--only-binary=:all:", "-r", str(NATIVE_DIR / "requirements.txt")],
+        check=True,
+    )
 
     # -I: isolated mode, ignoring PYTHON* environment variables and not putting
     # the script's directory first on sys.path.
-    LAUNCHER.write_text(f'#!/bin/sh\nexec "{python}" -I "{NATIVE_DIR / "host.py"}"\n')
+    LAUNCHER.write_text(f"#!/bin/sh\nexec {shlex.quote(str(python))} -I {shlex.quote(str(NATIVE_DIR / 'host.py'))}\n")
     LAUNCHER.chmod(stat.S_IRWXU)
 
     directory = manifest_dir()

@@ -10,6 +10,8 @@ const MAX_CONTRIBUTING_CHARS = 30_000;
 
 // Keyed by "owner/repo#number"; reused while the PR head is unchanged.
 const cache = new Map();
+// Requests in progress, by the same key, so repeated clicks don't pay twice.
+const inflight = new Map();
 
 // Earlier versions stored the API key here; it now lives in the OS keychain.
 browser.storage.local.remove("apiKey");
@@ -26,10 +28,13 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message?.type === "suggest") {
     const { owner, repo, number, force } = message;
     if (!validPullRef(owner, repo, number)) return Promise.resolve({ error: "Invalid pull request reference." });
-    return suggest({ owner, repo, number, force: force === true }).catch((e) => ({
-      error: describeError(e),
-      needsSettings: e.needsSetup === true,
-    }));
+    const key = `${owner}/${repo}#${number}`;
+    if (inflight.has(key)) return inflight.get(key);
+    const promise = suggest({ owner, repo, number, force: force === true })
+      .catch((e) => ({ error: describeError(e), needsSettings: e.needsSetup === true }))
+      .finally(() => inflight.delete(key));
+    inflight.set(key, promise);
+    return promise;
   }
   return undefined;
 });

@@ -43,6 +43,7 @@ class ValidatedParams(unittest.TestCase):
             {"model": "claude-opus-5-5/../../v1/files"},
             {"max_tokens": 128000},
             {"max_tokens": "16000"},
+            {"max_tokens": True},
             {"messages": []},
             {"messages": [{"role": "assistant", "content": "x"}]},
             {"messages": [{"role": "user", "content": [{"type": "document", "source": {"type": "url", "url": "https://x"}}]}]},

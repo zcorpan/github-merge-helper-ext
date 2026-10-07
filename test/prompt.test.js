@@ -48,3 +48,22 @@ test("HTML comments are stripped quickly, including unclosed ones", () => {
   assert.ok(message.includes("Visible  text"));
   assert.ok(!message.includes("Fixes #9"));
 });
+
+test("commit messages are capped in total", () => {
+  const commits = Array.from({ length: 300 }, (_, i) => ({
+    sha: String(i).padStart(40, "0"),
+    commit: { message: "m".repeat(10_000), author: { name: "a" } },
+  }));
+  const message = buildUserMessage({
+    owner: "whatwg",
+    repo: "html",
+    pr: { number: 1, title: "t", body: "b".repeat(100_000), user: { login: "u" } },
+    commits,
+    diff: "d".repeat(300_000),
+    diffTruncated: true,
+    mode: "generate",
+    boundary,
+  });
+  assert.ok(message.length < 600_000, `${message.length}`);
+  assert.match(message, /\(280 more commits omitted\)/);
+});

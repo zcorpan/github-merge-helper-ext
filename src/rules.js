@@ -88,6 +88,8 @@ export function buildSystemPrompt({ owner, repo, contributing, extraInstructions
 
 const MAX_DESCRIPTION_CHARS = 50_000;
 const MAX_COMMIT_MESSAGE_CHARS = 10_000;
+// Keeps the whole message well under the native host's 1,000,000-character cap.
+const MAX_COMMITS_CHARS = 200_000;
 
 // Everything from the PR goes inside one block whose tag name contains a random
 // boundary, so the data can't close it and pose as instructions.
@@ -102,8 +104,8 @@ export function buildUserMessage({ owner, repo, pr, commits, diff, diffTruncated
     `Diff truncated: ${diffTruncated ? "yes" : "no"}`,
     "",
     `<${boundary}>`,
-    `PR author: @${u(pr.user?.login)}`,
-    `PR title: ${u(pr.title)}`,
+    `PR author: @${u(pr.user?.login).slice(0, 100)}`,
+    `PR title: ${u(pr.title).slice(0, 1000)}`,
     "",
     "<pr_description>",
     u(cleanDescription(pr.body ?? "").slice(0, MAX_DESCRIPTION_CHARS)),
@@ -111,14 +113,15 @@ export function buildUserMessage({ owner, repo, pr, commits, diff, diffTruncated
     "",
     "<commits>",
   ];
-  for (const c of commits) {
-    lines.push(
-      `<commit sha="${u(c.sha).slice(0, 12)}">`,
-      `Author: ${u(c.commit.author?.name)}`,
-      "",
-      u(c.commit.message.slice(0, MAX_COMMIT_MESSAGE_CHARS)),
-      "</commit>",
-    );
+  let budget = MAX_COMMITS_CHARS;
+  for (const [i, c] of commits.entries()) {
+    const message = u(c.commit.message.slice(0, Math.min(MAX_COMMIT_MESSAGE_CHARS, budget)));
+    budget -= message.length;
+    lines.push(`<commit sha="${u(c.sha).slice(0, 12)}">`, `Author: ${u(c.commit.author?.name).slice(0, 200)}`, "", message, "</commit>");
+    if (budget <= 0) {
+      lines.push(`(${commits.length - i - 1} more commits omitted)`);
+      break;
+    }
   }
   lines.push("</commits>", "", "<diff>", u(diff), "</diff>", `</${boundary}>`);
   return lines.join("\n");
