@@ -58,7 +58,7 @@ The registration points at this checkout, so don't move or delete the directory 
 
 Choose one:
 
-- **Temporary (any Firefox):** go to `about:debugging#/runtime/this-firefox`, click "Load Temporary Add-on…", and pick `dist/manifest.json`. It stays until Firefox restarts. `npm start` does the same in Firefox Nightly with a fresh profile, which isn't logged in to GitHub.
+- **Temporary (any Firefox):** go to `about:debugging#/runtime/this-firefox`, click "Load Temporary Add-on…", and pick the `manifest.json` file inside `dist/` (not the folder). It stays until Firefox restarts. `npm start` does the same in Firefox Nightly with a fresh profile, which isn't logged in to GitHub.
 - **Permanent, unsigned (Firefox Nightly or Developer Edition):** set `xpinstall.signatures.required` to `false` in `about:config`, run `npm run package`, then go to `about:addons` → gear menu → "Install Add-on From File…" and pick the zip in `web-ext-artifacts/`.
 - **Permanent, signed (any Firefox, including release):** sign it as an unlisted add-on on addons.mozilla.org. This doesn't publish it. Get API credentials at <https://addons.mozilla.org/developers/addon/api/key/>, then run:
 
@@ -73,7 +73,7 @@ On install, Firefox asks for access to `github.com` and `api.github.com`, and to
 
 ## Settings
 
-Open `about:addons` → GitHub Merge Helper → Preferences.
+In `about:addons`, click the `…` menu next to GitHub Merge Helper and choose "Options" (it opens in a new tab).
 
 - **Test connection:** checks that the native helper runs and the API key works (a free request that lists one model).
 - **Model:** default `claude-opus-5-5`.

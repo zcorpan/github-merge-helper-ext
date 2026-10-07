@@ -91,7 +91,7 @@ def install():
 
     if not has_key():
         set_key()
-    print("Done. In the extension's settings, click “Test connection”.")
+    print("Done. In the extension's options (about:addons, … menu), click “Test connection”.")
 
 
 def uninstall():
