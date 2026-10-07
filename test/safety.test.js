@@ -8,6 +8,7 @@ import {
   extractRefs,
   issueLinks,
   stripInvisible,
+  titleLimit,
   validPullRef,
 } from "../src/safety.js";
 
@@ -111,4 +112,10 @@ test("issueLinks builds github.com URLs from validated parts only", () => {
     ],
   );
   for (const { href } of links) assert.match(href, /^https:\/\/github\.com\/[A-Za-z0-9-]+\/[A-Za-z0-9._-]+\/issues\/\d+$/);
+});
+
+test("titleLimit is a hard 72 for whatwg only", () => {
+  assert.equal(titleLimit("whatwg"), 72);
+  assert.equal(titleLimit("WHATWG"), 72);
+  assert.equal(titleLimit("web-platform-tests"), null);
 });

@@ -7,7 +7,7 @@
 // checked by safety.js for closing keywords, unexpected references, and
 // invisible characters. Clicks synthesized by page scripts are ignored.
 
-import { checkMessage, cleanTrailer, issueLinks, stripInvisible, validPullRef } from "./safety.js";
+import { checkMessage, cleanTrailer, issueLinks, stripInvisible, titleLimit, validPullRef } from "./safety.js";
 
 const MERGE_LABEL =
   /^(?:Merge pull request|Squash and merge|Rebase and merge|Enable auto-merge(?: \(\w+\))?|Confirm (?:merge|squash and merge|rebase and merge|auto-merge(?: \(\w+\))?))$/i;
@@ -386,7 +386,10 @@ function currentChecks() {
   const result = checkMessage({ title: title.value, body: body.value }, state.result.knownRefs, state.owner, state.repo);
   const invisible = stripInvisible(title.value).removed + stripInvisible(body.value).removed;
   result.removed = state.result.removedChars + invisible;
-  result.warnings = result.unknown.length > 0 || result.removed > 0;
+  const limit = titleLimit(state.owner);
+  const length = finalMessage(title.value, "", []).title.length;
+  result.titleTooLong = limit && length > limit ? { length, limit } : null;
+  result.warnings = result.unknown.length > 0 || result.removed > 0 || result.titleTooLong !== null;
   return result;
 }
 
@@ -399,6 +402,10 @@ function renderChecks(container) {
   if (result.unknown.length) {
     const text = `Not in the PR title, description, or commits: ${result.unknown.join(", ")}. Check these are legitimate.`;
     items.push(h("li", { className: "gmh-warning" }, ...linkified(text)));
+  }
+  if (result.titleTooLong) {
+    const { length, limit } = result.titleTooLong;
+    items.push(h("li", { className: "gmh-warning" }, `The title is ${length} characters; ${state.owner} allows at most ${limit}.`));
   }
   if (result.removed) {
     items.push(h("li", { className: "gmh-warning" }, `${result.removed} invisible or control character(s) were or will be removed.`));

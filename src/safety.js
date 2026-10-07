@@ -3,6 +3,11 @@
 // by prompt injection. Nothing here relies on the model behaving.
 
 export const MAX_TITLE_CHARS = 200;
+
+// Hard title length limits by repository owner (WHATWG's committer guidelines).
+export function titleLimit(owner) {
+  return owner.toLowerCase() === "whatwg" ? 72 : null;
+}
 export const MAX_BODY_CHARS = 10_000;
 
 const OWNER = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;

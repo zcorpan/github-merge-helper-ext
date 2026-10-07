@@ -13,7 +13,7 @@ Judge whether a maintainer would merge the message as written, not whether it ma
 Acceptable, so never flag these on their own:
 - A long description, when the length is substance: what behavior changes, why, edge cases, how implementations behave, what a follow-up will do. Several paragraphs, or an "In addition:" list of further behavior changes, are fine.
 - No description at all, when the title says enough.
-- Titles a bit over 72 characters (up to about 90).
+- Titles a bit over 72 characters (up to about 90), unless the repository rules make 72 a hard limit.
 - Backticks around code, or plain text without them. Wrapped or unwrapped lines.
 - "Fixes #N" or "Closes #N", with or without a trailing period; several on one line ("Closes #1 and closes #2.").
 - No "Tests:" line, or tests described in prose ("Tests for effects: <URL>", "Additional tests: <URL>").
@@ -23,7 +23,7 @@ Real problems:
 - Unnecessary or padded text: a wall of text that restates the diff file by file or edit by edit, generic filler ("This PR improves...", "comprehensive", "robust", "ensures that"), "Summary"/"Changes" headings, or other signs of verbose AI-generated prose that a human editor would cut.
 - Leftovers from the PR description or GitHub: template checklists, HTML comments, preview links, Markdown headings, images, or links in [text](url) form, and GitHub's default squash list of commit subjects ("* Small clean up", "* Address review").
 - Content about the review process rather than the change ("Address review comments", "Rebase").
-- A title that doesn't describe the change ("Add test", "Fixes"), is cut off mid-sentence, is far too long (over about 90 characters), or contains a pull request reference such as "(#123)".
+- A title that doesn't describe the change ("Add test", "Fixes"), is cut off mid-sentence, is too long (over about 90 characters, or over the repository's hard limit), or contains a pull request reference such as "(#123)".
 - A description that misdescribes the change, or contradicts the diff.
 - Missing or wrong issue references, per the repository rules.`;
 
@@ -46,6 +46,7 @@ Based on the WHATWG committer guidelines (https://github.com/whatwg/meta/blob/ma
   - "Editorial: " only if the change just fixes formatting or typos, or is a refactoring that does not change how the standard is understood. Bug fixes and clarifications are not editorial, even if they only affect non-normative text. A missing or wrong "Editorial: " is a real problem.
   - "Meta: " for changes that do not affect the text of the standard but the ecosystem around it, such as tooling, CI, or contributor documentation.
   - The text after these prefixes usually starts lowercase ("Editorial: fix typo").
+- The title is at most 72 characters. This is a hard limit: a longer title is always a real problem, even if only slightly over. When fixing one, shorten it without losing what the change does.
 - The title is imperative ("Fix", "Allow", "Remove") and has no trailing period; past tense or a trailing period is a real problem.
 - Issues: use a closing keyword ("Fixes #N." or "Closes #N.") for issues this change resolves, and a non-closing reference ("Part of #N.", "Helps with #N.", "See #N.") for issues it only partly addresses. A description that says the change resolves an issue without a closing reference for it, or a closing reference for an issue it only partly addresses, is a real problem. Issues in other repositories use the owner/repo#N form.
 - Other reference lines seen in practice: "Tests: <URL>" for the change's tests (a web-platform-tests PR or other test change), "Follows <URL>", "Goes with <URL>", "Follow-up to #N", "This is a follow-up to <full SHA>.", "See also <URL>". When writing, include "Tests:" if the PR description links the tests; never require it in review.
