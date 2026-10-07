@@ -37,11 +37,24 @@ button {
   font: inherit;
 }
 
-#test-key {
+#test-connection {
   margin-top: 0.5em;
 }
 
 #status,
 #test-status {
   margin-inline-start: 1em;
+}
+
+h2 {
+  margin: 1.5em 0 0.25em;
+  font-size: 1.1em;
+}
+
+pre {
+  padding: 0.5em 0.75em;
+  font-size: 13px;
+  background: rgb(128 128 128 / 0.12);
+  border-radius: 4px;
+  overflow-x: auto;
 }

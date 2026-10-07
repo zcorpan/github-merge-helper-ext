@@ -4,6 +4,8 @@ A Firefox extension that asks Claude to help with the commit message when you me
 
 It adds a button next to the green merge button on PRs you can merge. The extension does nothing until you click it.
 
+Requests to the Claude API go through a small local helper program (a [native messaging host](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Native_messaging)) that keeps your API key in the macOS Keychain or the Linux keyring. The key never enters the browser, and this also works for organizations where the API blocks browser (CORS) requests, such as those with custom data-retention settings. macOS and Linux only.
+
 - **One commit:** "Review commit message" checks the commit message against the repository's rules (e.g. title length, imperative mood, `Editorial: ` prefix, a missing `Fixes #N.`). If it needs changes, you get a fixed version.
 - **Several commits:** "Write squash commit message" writes a new message from the commits and the PR description. It's kept short, focuses on rationale rather than what the diff shows, and drops the `(#123)` PR reference from the title.
 
@@ -23,18 +25,36 @@ For other repositories it also fetches `CONTRIBUTING.md` (root, `.github/`, or `
 
 ## Build
 
-Requires Node.js 20 or later.
+Requires Node.js 20 or later and Python 3.10 or later.
 
 ```sh
 npm install
-npm run build      # outputs the extension to dist/
-npm test           # unit tests for the safety checks and prompt building
-npm run lint       # build + web-ext lint
+npm run build        # outputs the extension to dist/
+npm test             # unit tests for the safety checks and prompt building
+npm run test:native  # unit tests for the native helper (after installing it)
+npm run lint         # build + web-ext lint
 npm run package    # build + zip into web-ext-artifacts/
 npm run watch      # rebuild on change
 ```
 
 ## Install
+
+### 1. The native helper
+
+From this directory:
+
+```sh
+python3 native/install.py
+```
+
+This creates a virtualenv in `native/.venv` with the pinned `anthropic` Python package, and registers the helper with Firefox by writing `github_merge_helper.json` to `~/Library/Application Support/Mozilla/NativeMessagingHosts/` (macOS) or `~/.mozilla/native-messaging-hosts/` (Linux). Only this extension's ID may start it. It then asks for your Claude API key (create one at <https://platform.claude.com/settings/keys>) at the keychain tool's own prompt, so the key doesn't end up in your shell history.
+
+- Change the key: `python3 native/install.py --set-key`
+- Remove the helper and the key: `python3 native/install.py --uninstall`
+
+The registration points at this checkout, so don't move or delete the directory afterwards (or re-run the installer if you do). Restart Firefox after installing.
+
+### 2. The extension
 
 Choose one:
 
@@ -49,13 +69,13 @@ Choose one:
 
   Then install the `.xpi` it downloads into `web-ext-artifacts/`. Bump `version` in `manifest.json` before each re-sign.
 
-On install, Firefox asks for access to `github.com`, `api.github.com`, and `api.anthropic.com`. If you load it temporarily and the button doesn't show up, check that these are allowed under the add-on's Permissions tab in `about:addons`.
+On install, Firefox asks for access to `github.com` and `api.github.com`, and to "exchange messages with programs other than Firefox" (the native helper). If you load it temporarily and the button doesn't show up, check that these are allowed under the add-on's Permissions tab in `about:addons`.
 
 ## Settings
 
 Open `about:addons` → GitHub Merge Helper → Preferences.
 
-- **Claude API key** (required): create one at <https://platform.claude.com/settings/keys>.
+- **Test connection:** checks that the native helper runs and the API key works (a free request that lists one model).
 - **Model:** default `claude-opus-5-5`.
 - **Effort:** default `medium`. Use `high` for subtler reviews; `low` is cheaper and faster.
 - **GitHub token** (optional): only for private repositories or if you hit the unauthenticated rate limit of 60 requests/hour (each click uses a few). Use a fine-grained token with read-only "Pull requests" and "Contents" access and nothing else.
@@ -77,7 +97,8 @@ Anyone can open a PR, so the PR title, description, commit messages, author name
 - **The model has no tools.** Its whole output is a JSON object with a title, body, verdict, and short notes, validated in [`src/safety.js`](src/safety.js). It can't make requests, run code, or call GitHub.
 - **No HTML from the model, ever.** The panel builds DOM nodes and sets text only; there are no `innerHTML`-style sinks anywhere in the extension.
 - **No GitHub actions.** The extension never clicks GitHub's buttons or submits forms. It only sets the values of the commit title and description fields, and you confirm the merge yourself. GitHub API requests are read-only `GET`s without cookies. The optional token should be a read-only fine-grained token; it's sent only to `api.github.com`.
-- **Nothing to exfiltrate, nowhere to send it.** The API key and GitHub token are never put in the prompt. A content security policy limits the extension's pages to connecting to `api.anthropic.com` and `api.github.com`, and the content script makes no network requests at all.
+- **Nothing to exfiltrate, nowhere to send it.** The API key never enters the browser: it's in the OS keychain and only the native helper reads it. The GitHub token is never put in the prompt. A content security policy limits the extension's pages to connecting to `api.github.com`, and the content script makes no network requests at all.
+- **The native helper only does one thing.** [`native/host.py`](native/host.py) rebuilds each request from an allowlist (model, a single user text message, system prompt, JSON output format, effort, max tokens) and rejects anything else, such as tools, files, or other endpoints. It ignores `ANTHROPIC_*` environment variables, so the browser's environment can't redirect requests, and it never returns the key. Any program running as your user could also read the key from the keychain, as with any locally stored credential.
 - **Checks that don't rely on the model**, shown in the panel under "Checked by the extension, not by Claude":
   - every issue the message will close when merged (`Fixes #N`, `closes owner/repo#N`, issue URLs),
   - any link, issue/PR reference, commit SHA, or `@mention` in the message that doesn't appear in the PR title, visible description, or commit messages,
@@ -91,4 +112,4 @@ What it can't prevent: a manipulated model writing a misleading or low-quality m
 
 ## Privacy
 
-Clicking the button sends the PR's title, description, commit messages, and diff (capped at 300,000 characters) to the Anthropic API using your key. Settings are stored in `browser.storage.local` (not synced). The extension makes no other requests besides read-only requests to `api.github.com`.
+Clicking the button sends the PR's title, description, commit messages, and diff (capped at 300,000 characters) to the Anthropic API using your key, via the native helper. Settings are stored in `browser.storage.local` (not synced). The extension makes no other requests besides read-only requests to `api.github.com`.

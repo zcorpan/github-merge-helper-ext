@@ -1,5 +1,4 @@
 export const DEFAULTS = {
-  apiKey: "",
   model: "claude-opus-5-5",
   effort: "medium",
   githubToken: "",

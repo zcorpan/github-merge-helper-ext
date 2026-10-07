@@ -5,12 +5,11 @@
 <link rel="stylesheet" href="options.css">
 <h1>GitHub Merge Helper</h1>
 <form id="settings">
-  <label>Claude API key
-    <input type="password" name="apiKey" autocomplete="off" required placeholder="sk-ant-…">
-  </label>
-  <p class="help">From <a href="https://platform.claude.com/settings/keys">platform.claude.com</a>. Stored locally in this browser profile, not synced.</p>
-  <p class="help" id="saved-key"></p>
-  <button type="button" id="test-key">Test key</button>
+  <h2>Claude API</h2>
+  <p class="help">Requests go through a small native helper that keeps your API key in the macOS Keychain (or the Linux keyring), outside the browser. To install it, or to change the key, run this from the extension's source directory and restart Firefox:</p>
+  <pre>python3 native/install.py           # first time
+python3 native/install.py --set-key # change the key</pre>
+  <button type="button" id="test-connection">Test connection</button>
   <span id="test-status" role="status"></span>
 
   <label>Model

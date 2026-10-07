@@ -1,19 +1,24 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { OUTPUT_SCHEMA, buildSystemPrompt, buildUserMessage, cleanDescription, repoRules } from "./rules.js";
 import { cleanSuggestion, cleanTrailer, extractRefs, stripInvisible, validPullRef } from "./safety.js";
 import { DEFAULTS } from "./defaults.js";
 
+// Name of the native messaging host installed by native/install.py, which holds
+// the API key and makes the request (browser requests are blocked for some orgs).
+const NATIVE_HOST = "github_merge_helper";
 const MAX_DIFF_CHARS = 300_000;
 const MAX_CONTRIBUTING_CHARS = 30_000;
 
 // Keyed by "owner/repo#number"; reused while the PR head is unchanged.
 const cache = new Map();
 
+// Earlier versions stored the API key here; it now lives in the OS keychain.
+browser.storage.local.remove("apiKey");
+
 browser.runtime.onMessage.addListener((message, sender) => {
   if (sender.id !== browser.runtime.id) return undefined;
-  // The settings page may test a key.
-  if (message?.type === "testKey" && sender.url === browser.runtime.getURL("options.html")) {
-    return testKey(String(message.apiKey ?? ""));
+  // The settings page may test the connection.
+  if (message?.type === "testConnection" && sender.url === browser.runtime.getURL("options.html")) {
+    return callHost({ type: "ping" }).then(() => ({ ok: true }), (e) => ({ error: describeError(e) }));
   }
   // Only our own content script on github.com may ask for suggestions.
   if (!sender.tab?.url?.startsWith("https://github.com/")) return undefined;
@@ -21,14 +26,16 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message?.type === "suggest") {
     const { owner, repo, number, force } = message;
     if (!validPullRef(owner, repo, number)) return Promise.resolve({ error: "Invalid pull request reference." });
-    return suggest({ owner, repo, number, force: force === true }).catch((e) => ({ error: describeError(e) }));
+    return suggest({ owner, repo, number, force: force === true }).catch((e) => ({
+      error: describeError(e),
+      needsSettings: e.needsSetup === true,
+    }));
   }
   return undefined;
 });
 
 async function suggest({ owner, repo, number, force }) {
   const settings = { ...DEFAULTS, ...(await browser.storage.local.get(null)) };
-  if (!settings.apiKey) return { error: "No Claude API key set.", needsSettings: true };
 
   const api = (path, accept) => githubFetch(`https://api.github.com${path}`, settings.githubToken, accept);
   const gh = (path, accept) => api(`/repos/${owner}/${repo}${path}`, accept);
@@ -49,28 +56,30 @@ async function suggest({ owner, repo, number, force }) {
   const boundary = `pr-data-${randomHex(16)}`;
 
   // No tools: the model can only return text, which is checked below and only
-  // ever shown as text or put in GitHub's commit form for you to confirm.
-  const client = new Anthropic({ apiKey: settings.apiKey, dangerouslyAllowBrowser: true });
-  const response = await client.beta.messages.create({
-    model: settings.model,
-    max_tokens: 16000,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
-    output_config: { effort: settings.effort, format: { type: "json_schema", schema: OUTPUT_SCHEMA } },
-    system: buildSystemPrompt({ owner, repo, contributing, extraInstructions: settings.extraInstructions, boundary }),
-    messages: [
-      { role: "user", content: buildUserMessage({ owner, repo, pr, commits, diff, diffTruncated, mode, boundary }) },
-    ],
+  // ever shown as text or put in GitHub's commit form for you to confirm. The
+  // native host rejects requests with any other shape.
+  const { response } = await callHost({
+    type: "messages",
+    params: {
+      model: settings.model,
+      max_tokens: 16000,
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      output_config: { effort: settings.effort, format: { type: "json_schema", schema: OUTPUT_SCHEMA } },
+      system: buildSystemPrompt({ owner, repo, contributing, extraInstructions: settings.extraInstructions, boundary }),
+      messages: [
+        { role: "user", content: buildUserMessage({ owner, repo, pr, commits, diff, diffTruncated, mode, boundary }) },
+      ],
+    },
   });
 
   if (response.stop_reason === "refusal") {
-    return { error: `Claude declined the request (${response.stop_details?.category ?? "no category"}).` };
+    return { error: `Claude declined the request (${response.stop_category ?? "no category"}).` };
   }
   if (response.stop_reason === "max_tokens") return { error: "Claude's response was cut off (max_tokens)." };
-  const text = response.content.filter((b) => b.type === "text").map((b) => b.text).join("");
   let parsed;
   try {
-    parsed = JSON.parse(text);
+    parsed = JSON.parse(String(response.text));
   } catch {
     return { error: "Claude returned malformed JSON." };
   }
@@ -107,16 +116,27 @@ async function suggest({ owner, repo, number, force }) {
   return result;
 }
 
-// A free request (lists one model) to check that the key works.
-async function testKey(apiKey) {
-  if (!apiKey) return { error: "Enter a key first." };
-  try {
-    const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true, maxRetries: 0 });
-    await client.models.list({ limit: 1 });
-    return { ok: true };
-  } catch (e) {
-    return { error: describeError(e) };
+class HostError extends Error {
+  constructor({ message, status, request_id }) {
+    super(String(message ?? "Unknown error."));
+    this.status = status;
+    this.requestId = request_id;
   }
+}
+
+async function callHost(message) {
+  let reply;
+  try {
+    reply = await browser.runtime.sendNativeMessage(NATIVE_HOST, message);
+  } catch (e) {
+    const error = new Error(
+      `Couldn't start the native helper (${e?.message ?? e}). Run \`python3 native/install.py\` from the extension's source directory, then restart Firefox.`,
+    );
+    error.needsSetup = true;
+    throw error;
+  }
+  if (!reply?.ok) throw new HostError(reply?.error ?? {});
+  return reply;
 }
 
 function randomHex(bytes) {
@@ -191,26 +211,13 @@ async function coAuthorTrailers(api, pr, commits) {
 }
 
 function describeError(e) {
-  if (e instanceof Anthropic.APIError && e.status) {
+  if (e instanceof HostError && e.status) {
     // Include the API's own explanation (e.g. why a key was rejected).
-    const detail = e.error?.error?.message ?? e.message;
-    const id = e.requestID ? ` (request ID ${e.requestID})` : "";
     const hint =
-      e instanceof Anthropic.AuthenticationError
-        ? "Claude API key was rejected"
-        : e instanceof Anthropic.PermissionDeniedError
-          ? "Claude API permission denied"
-          : e instanceof Anthropic.NotFoundError
-            ? "Claude API 404 (unknown model?)"
-            : e instanceof Anthropic.RateLimitError
-              ? "Claude API rate limit hit"
-              : e instanceof Anthropic.BadRequestError
-                ? "Claude API rejected the request"
-                : e instanceof Anthropic.InternalServerError
-                  ? "Claude API is having trouble"
-                  : "Claude API error";
-    return `${hint} (${e.status}): ${detail}${id}`;
+      { 401: "Claude API key was rejected", 403: "Claude API permission denied", 404: "Claude API 404 (unknown model?)", 429: "Claude API rate limit hit" }[e.status] ??
+      (e.status >= 500 ? "Claude API is having trouble" : "Claude API rejected the request");
+    const id = e.requestId ? ` (request ID ${e.requestId})` : "";
+    return `${hint} (${e.status}): ${e.message}${id}`;
   }
-  if (e instanceof Anthropic.APIConnectionError) return "Couldn't reach the Claude API.";
   return e?.message ?? String(e);
 }
