@@ -607,8 +607,16 @@ function normalized(text) {
   return text.replace(/\s+/g, " ").trim();
 }
 
+// GitHub renders the merge box, changes its buttons, and navigates without
+// page loads, so re-check after DOM changes (debounced). Hidden tabs skip the
+// work (GitHub keeps updating them) and check once when shown again.
 let scheduled = false;
+let missed = false;
 new MutationObserver(() => {
+  if (document.hidden) {
+    missed = true;
+    return;
+  }
   if (scheduled) return;
   scheduled = true;
   setTimeout(() => {
@@ -616,4 +624,14 @@ new MutationObserver(() => {
     check();
   }, 250);
 }).observe(document.documentElement, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["disabled", "aria-disabled"] });
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && missed) {
+    missed = false;
+    check();
+  }
+});
+// Back/forward cache restores don't necessarily mutate the DOM.
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) check();
+});
 check();
