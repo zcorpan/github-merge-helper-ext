@@ -131,17 +131,21 @@ function findMergeButton() {
   return found.length === 1 ? found[0] : null;
 }
 
-// The merge button usually sits in a split-button group (or next to Cancel when
-// confirming); put our button after the whole group.
+// Where our controls go: after GitHub's merge controls. With the merge method
+// menu, that's the Primer split button's ButtonGroup. In the commit editor,
+// the confirm button sits alone in a loading wrapper, in a row with Cancel, so
+// it's that row's last control. Our own elements never count, so the anchor
+// doesn't change when we insert them next to it.
+const OUR_CONTROLS = ".gmh-button, .gmh-restore";
+
 function buttonGroup(merge) {
-  // GitHub's Primer split button: the merge button and the method menu are
-  // separate items in one ButtonGroup.
   const group = merge.closest('[data-component="ButtonGroup"]');
   if (group) return group;
-  const parent = merge.parentElement;
-  const siblings = parent ? [...parent.children].filter((c) => c !== merge && !c.classList.contains("gmh-button")) : [];
-  if (parent && siblings.length <= 2 && siblings.some((c) => c.matches("button") || c.querySelector("button"))) return parent;
-  return merge;
+  const item = merge.closest("[data-loading-wrapper]") ?? merge;
+  const row = item.parentElement;
+  const theirs = row ? [...row.children].filter((c) => !c.matches(OUR_CONTROLS)) : [];
+  if (theirs.length > 1 && theirs.length <= 3 && theirs.every((c) => c.matches("button") || c.querySelector("button"))) return theirs.at(-1);
+  return item;
 }
 
 function mergeMethod(merge) {
