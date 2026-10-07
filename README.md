@@ -90,6 +90,8 @@ In `about:addons`, click the `…` menu next to GitHub Merge Helper and choose "
 
 Results are cached until the PR's head commit changes; "Regenerate" asks again.
 
+After you update the extension, open PR pages keep working with a lone button replaced. If a suggestion or error panel was showing, it stays readable but inactive, with a note to reload the page.
+
 ## Security
 
 Anyone can open a PR, so the PR title, description, commit messages, author names, and diff are untrusted, and may contain prompt injection ("ignore previous instructions…"). The extension is built so that clicking the button can't do anything beyond showing text and putting it in GitHub's commit form:

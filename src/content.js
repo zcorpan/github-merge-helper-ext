@@ -22,6 +22,36 @@ const USER_CONTENT = ".markdown-body, .comment-body, .js-comment-body, .comment-
 let state = null;
 let warnTimer = null;
 
+// Each run of this script tags the elements it creates. After an update,
+// Firefox injects the new version into open tabs while the old version's
+// elements stay in the page with handlers that no longer run.
+const INSTANCE = crypto.randomUUID();
+const OUR_ELEMENTS = ".gmh-button, .gmh-panel";
+
+// Deals with a previous version's leftovers: a lone button is removed (ours
+// replaces it); a panel is kept, with its buttons disabled and a note to
+// reload. Returns true while such a panel is on the page, so this version
+// stays out of the way until then.
+function handleStale() {
+  const stale = [...document.querySelectorAll(OUR_ELEMENTS)].filter(
+    (el) => el.dataset.gmhInstance !== INSTANCE && !el.closest(USER_CONTENT),
+  );
+  const panels = stale.filter((el) => el.classList.contains("gmh-panel"));
+  if (!panels.length) {
+    for (const el of stale) el.remove();
+    return false;
+  }
+  for (const el of stale) {
+    for (const button of el.matches("button") ? [el] : el.querySelectorAll("button")) button.disabled = true;
+  }
+  for (const panel of panels) {
+    if (!panel.querySelector(".gmh-update-note")) {
+      panel.prepend(h("p", { className: "gmh-update-note", role: "status" }, "GitHub Merge Helper was updated. Reload the page to use the new version."));
+    }
+  }
+  return true;
+}
+
 function freshState(path, [, owner, repo, number]) {
   return { path, owner, repo, number: Number(number), result: null, loading: false, filled: null, button: null, panel: null,
     pageCommitCount: null, warned: false, noWriteAccess: false, lastScan: 0 };
@@ -30,13 +60,13 @@ function freshState(path, [, owner, repo, number]) {
 function check() {
   const match = location.pathname.match(PR_PATH);
   if (state?.path !== location.pathname) {
-    state?.button?.remove();
-    state?.panel?.remove();
+    // Navigated away: drop our elements, and any a previous version left.
+    if (state) for (const el of document.querySelectorAll(OUR_ELEMENTS)) el.remove();
     clearTimeout(warnTimer);
     warnTimer = null;
     state = match && validPullRef(match[1], match[2], Number(match[3])) ? freshState(location.pathname, match) : null;
   }
-  if (!state) return;
+  if (!state || handleStale()) return;
 
   const merge = findMergeButton();
   if (!merge || isDisabled(merge)) {
@@ -164,6 +194,7 @@ function maybeWarn() {
 
 function createButton() {
   const button = h("button", { type: "button", className: "gmh-button" });
+  button.dataset.gmhInstance = INSTANCE;
   onClick(button, onButtonClick);
   return button;
 }
@@ -224,6 +255,7 @@ function placePanel(merge, panel) {
 }
 
 function replacePanel(merge, panel) {
+  panel.dataset.gmhInstance = INSTANCE;
   state.panel?.remove();
   state.panel = panel;
   placePanel(merge, panel);

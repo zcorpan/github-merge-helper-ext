@@ -204,3 +204,9 @@
   margin-inline-end: 24px !important;
   white-space: pre-wrap;
 }
+
+.gmh-update-note {
+  margin-inline-end: 24px !important;
+  font-weight: 600;
+  color: var(--fgColor-attention, #9a6700);
+}
