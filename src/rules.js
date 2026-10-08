@@ -27,14 +27,23 @@ Real problems:
 - A description that misdescribes the change, or contradicts the diff.
 - Missing or wrong issue references, per the repository rules.`;
 
-// How to write a message (squash mode, or fixing one in review mode). This is
-// the maintainer's own style, stricter than what review accepts.
+// How to write a message (squash mode, or fixing one in review mode). The
+// commit message is part of the contribution, so the author's own message and
+// style come first; the maintainer's style is for when there's nothing to keep.
 const WRITING_RULES = `\
-- Title: at most 72 characters, imperative mood ("Fix", "Add", "Remove"), no trailing period, no pull request reference such as "(#123)".
+Start from the author's own message, since it's part of their contribution:
+- Find the message the author meant for the commit: usually the first commit's message, or the top of the PR description (whatwg's PR template asks for "a clear commit message to use" there). Prefer whichever is more complete and up to date.
+- If it's generally acceptable (see "Reviewing a message"), keep it and keep the author's style: their wording, length, paragraphs, line wrapping (wrap edited lines to the same width), use of backticks or not, and how they write references. Fix only real problems, such as a PR reference or trailing period in the title, a title over the repository's limit, a missing or wrong closing reference, template or squash leftovers, or parts that later commits made outdated. Make each fix in the author's style, changing as little as possible.
+- In review mode, fix only the problems and keep the rest of the message exactly as it is.
+
+Only when there's no usable message from the author (e.g. the commits are just fixups and the PR description is empty or only a template), write one in the maintainer's style:
+- Title: at most 72 characters, imperative mood ("Fix", "Add", "Remove"), no trailing period.
 - Keep it short. The title often says it all; add a description only when it needs explaining, usually a few sentences focused on intent and rationale (why the change is made, what problem it solves), not a restatement of the diff. A change with several independent behavior changes may list them, but never pad.
-- When the PR description or commits already explain the rationale well, prefer the author's own wording, trimmed to what matters. In review mode, fix only the problems and keep the rest of the author's message as it is.
 - Backticks around code identifiers are fine but optional.
 - en-US spelling. Limit em-dashes; prefer comma, colon, parentheses, or a new sentence.
+
+Always:
+- Never put a pull request reference such as "(#123)" in the title.
 - Do not output Co-authored-by or other trailers; they are added automatically.
 - Never invent issue numbers, URLs, SHAs, or facts. Everything referenced must come from the PR title, description, or commits.
 - Use the PR description's prose, but not its template boilerplate, checklists, HTML comments, or preview links, except for information worth keeping as described in the repository rules.`;
@@ -49,7 +58,7 @@ Based on the WHATWG committer guidelines (https://github.com/whatwg/meta/blob/ma
 - The title is at most 72 characters. This is a hard limit: a longer title is always a real problem, even if only slightly over. When fixing one, shorten it without losing what the change does.
 - The title is imperative ("Fix", "Allow", "Remove") and has no trailing period; past tense or a trailing period is a real problem.
 - Issues: use a closing keyword ("Fixes #N." or "Closes #N.") for issues this change resolves, and a non-closing reference ("Part of #N.", "Helps with #N.", "See #N.") for issues it only partly addresses. A description that says the change resolves an issue without a closing reference for it, or a closing reference for an issue it only partly addresses, is a real problem. Issues in other repositories use the owner/repo#N form.
-- Other reference lines seen in practice: "Tests: <URL>" for the change's tests (a web-platform-tests PR or other test change), "Follows <URL>", "Goes with <URL>", "Follow-up to #N", "This is a follow-up to <full SHA>.", "See also <URL>". When writing, include "Tests:" if the PR description links the tests; never require it in review.
+- Other reference lines seen in practice: "Tests: <URL>" for the change's tests (a web-platform-tests PR or other test change), "Follows <URL>", "Goes with <URL>", "Follow-up to #N", "This is a follow-up to <full SHA>.", "See also <URL>". Never require "Tests:" in review. When writing from scratch, include it if the PR description links the tests; when keeping the author's message, don't add one they didn't write.
 - Reference lines usually go at the end, each in its own paragraph, with "Tests:" before "Fixes"/"Closes".
 - Squash and merge: the description should read as one coherent description, not a list of commits.
 
@@ -160,7 +169,7 @@ export function buildSystemPrompt({ owner, repo, contributing, extraInstructions
     "",
     "Task modes:",
     '- review: the PR has exactly one commit, written by the contributor. Review its message as described above. Set verdict to "ok" unless there is a real problem, and then to "needs_changes" with each problem in issues (one short sentence each, e.g. "Title is in past tense", "Description says it resolves #123 but has no closing reference for it"). In both cases return in title/body the message to use: unchanged if ok (minus any trailers), otherwise the author\'s message with only the problems fixed.',
-    '- generate: the PR has several commits that will be squashed. Write a new message from the commits and the PR description, following "Writing a message". Set verdict to "generated" and issues to [].',
+    '- generate: the PR has several commits that will be squashed. Following "Writing a message", produce the message from the author\'s own message if there is a usable one (fixed only where needed), otherwise write one. Set verdict to "generated" and issues to []. If you started from the author\'s message and changed anything, say what in notes, briefly.',
     "",
     "body is the description without trailers, or an empty string if no description is needed. notes is an empty string, or one or two short sentences for anything the maintainer should double-check (e.g. whether an issue is fully resolved). Write issues and notes tersely, without preamble.",
   );
