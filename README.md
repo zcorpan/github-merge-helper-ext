@@ -91,7 +91,7 @@ In `about:addons`, click the `…` menu next to GitHub Merge Helper and choose "
 3. Click "Review commit message" or "Write squash commit message" next to the merge button.
 4. Read the panel, edit the message if needed, and fill it in if it wasn't filled in already. Then confirm the merge yourself as usual.
 
-Once shown, the panel stays: when GitHub re-renders the merge box, when you switch to "Files changed" and back, and when you come back to the PR later, with any edits you made in it. Saved results are dropped when you close the panel (×), when the PR is merged or closed (checked on your next visit), or after 30 days. If the PR got new commits since, the panel says so; "Regenerate" asks again. A restored panel never fills in GitHub's form by itself.
+Once shown, the panel stays: when GitHub re-renders the merge box, when you switch to "Files changed" and back, and when you come back to the PR later, with any edits you made in it. Saved results are dropped when you close the panel (×), when the PR is merged or closed (the panel closes when you merge, and saved results for PRs closed elsewhere are dropped on your next visit), or after 30 days. If the PR got new commits since, the panel says so; "Regenerate" asks again. A restored panel never fills in GitHub's form by itself.
 
 After you update the extension, open PR pages keep working with a lone button replaced. If a suggestion or error panel was showing, it stays readable but inactive, with a note to reload the page.
 

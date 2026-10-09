@@ -38,6 +38,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.type === "restore") return restoreSaved({ owner, repo, number, key }).catch(() => null);
   if (message.type === "saveEdits") return saveEdits(key, message.title, message.body).catch(() => undefined);
   if (message.type === "forget") return browser.storage.local.remove(SAVED_PREFIX + key);
+  if (message.type === "prState") return prState({ owner, repo, number, key }).catch(() => ({ open: true }));
   if (message.type === "squashDefaults") return squashDefaults({ owner, repo, number }).catch((e) => ({ error: describeError(e) }));
   if (message.type === "suggest") {
     if (inflight.has(key)) return inflight.get(key);
@@ -60,6 +61,7 @@ async function suggest({ owner, repo, number, force }) {
   const settings = await browser.storage.local.get(DEFAULTS);
   const { api, gh } = githubFor(settings, owner, repo);
   const pr = await (await gh(`/pulls/${number}`)).json();
+  if (pr.state !== "open") return { error: "This PR is no longer open." };
   const key = `${owner}/${repo}#${number}`;
   const cached = cache.get(key);
   if (!force && cached?.headSha === pr.head.sha) {
@@ -204,6 +206,17 @@ async function squashDefaults({ owner, repo, number }) {
     description: rest.filter((line) => !isTrailer(line)).join("\n").trim().slice(0, MAX_BODY_CHARS),
     trailers: trailers.map(cleanTrailer).filter(Boolean),
   };
+}
+
+// Whether the PR is still open; if not (just merged or closed), forget what was
+// saved for it. One read-only GitHub request.
+async function prState({ owner, repo, number, key }) {
+  const settings = await browser.storage.local.get(DEFAULTS);
+  const pr = await (await githubFor(settings, owner, repo).gh(`/pulls/${number}`)).json();
+  if (pr.state === "open") return { open: true };
+  cache.delete(key);
+  await browser.storage.local.remove(SAVED_PREFIX + key);
+  return { open: false };
 }
 
 function validEdits(edits) {
