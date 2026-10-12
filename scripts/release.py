@@ -17,6 +17,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -107,7 +108,9 @@ def main():
     xpis = sorted(ARTIFACTS.glob(f"*-{new}.xpi"), key=lambda p: p.stat().st_mtime)
     if not xpis:
         sys.exit(f"web-ext sign didn't produce a {new} .xpi in {ARTIFACTS}.")
-    xpi = xpis[-1]
+    # AMO names the file after an internal ID; give the release asset a readable name.
+    xpi = ARTIFACTS / f"github-merge-helper-{new}.xpi"
+    shutil.copyfile(xpis[-1], xpi)
     digest = hashlib.sha256(xpi.read_bytes()).hexdigest()
     updates = {
         "addons": {
