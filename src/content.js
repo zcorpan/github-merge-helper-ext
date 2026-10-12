@@ -58,7 +58,7 @@ function handleStale() {
 function freshState(key, owner, repo, number) {
   return { key, owner, repo, number, result: null, loading: false, filled: null, button: null, panel: null,
     pageCommitCount: null, warned: false, noWriteAccess: false, lastScan: 0,
-    cleanup: null, restoreButton: null, mergeSeen: false, goneTimer: null };
+    cleanup: null, restoreButton: null, mergeSeen: false, goneTimer: null, goneChecks: 0 };
 }
 
 function check() {
@@ -75,6 +75,13 @@ function check() {
   }
   if (!state || match[4] || handleStale()) return;
 
+  // The PR header says it was just merged or closed: close the panel now,
+  // without waiting for checkStillOpen() below.
+  if (state.panel && pageSaysClosed()) {
+    closePanelForClosedPr(state);
+    return;
+  }
+
   // The button is there whenever the merge button is, even while GitHub has it
   // disabled (e.g. while checking mergeability).
   const merge = findMergeButton();
@@ -82,6 +89,7 @@ function check() {
     clearTimeout(warnTimer);
     warnTimer = null;
     state.mergeSeen = true;
+    state.goneChecks = 0;
     clearTimeout(state.goneTimer);
     state.goneTimer = null;
     const button = (state.button ??= createButton());
@@ -98,8 +106,12 @@ function check() {
     state.restoreButton?.remove();
     maybeWarn();
     // The merge button went away (e.g. the PR was just merged) while a panel
-    // is showing: once it has stayed away for a moment, check the PR's state.
-    if (state.mergeSeen && state.panel && !state.goneTimer) state.goneTimer = setTimeout(() => checkStillOpen(state), 1500);
+    // is showing: once it has stayed away for a moment, check the PR's state,
+    // a few times in case GitHub's API lags behind the page.
+    if (state.mergeSeen && state.panel && !state.goneTimer && state.goneChecks < GONE_CHECK_DELAYS.length) {
+      const s = state;
+      s.goneTimer = setTimeout(() => checkStillOpen(s), GONE_CHECK_DELAYS[s.goneChecks]);
+    }
   }
 
   // GitHub re-renders the merge box at times; put the panel back when it does.
@@ -107,22 +119,45 @@ function check() {
   if (state.panel) updatePanelControls();
 }
 
-// Removes the panel (and the saved result) if the PR is no longer open. Needs
-// the merge button to come back before it checks again.
+const GONE_CHECK_DELAYS = [1500, 5000, 15000];
+
+// Removes the panel (and the saved result) if the PR is no longer open. After
+// the last retry, needs the merge button to come back before checking again.
 async function checkStillOpen(s) {
-  s.goneTimer = null;
-  if (state !== s || findMergeButton()) return;
-  s.mergeSeen = false;
+  if (state !== s || findMergeButton()) {
+    s.goneTimer = null;
+    return;
+  }
+  s.goneChecks++;
   let reply;
   try {
     reply = await browser.runtime.sendMessage({ type: "prState", owner: s.owner, repo: s.repo, number: s.number });
   } catch {
+    reply = null;
+  }
+  s.goneTimer = null;
+  if (state !== s) return;
+  if (reply?.open !== false) {
+    check();
     return;
   }
-  if (state !== s || reply?.open !== false) return;
+  closePanelForClosedPr(s);
+}
+
+// The PR header's state label (GitHub's Primer StateLabel; the page has two,
+// one for the sticky header): true if they all say merged or closed.
+function pageSaysClosed() {
+  const statuses = [...document.querySelectorAll('header [data-component="StateLabel"]')].map((el) => el.dataset.status);
+  return statuses.length > 0 && statuses.every((status) => status === "pullMerged" || status === "pullClosed");
+}
+
+function closePanelForClosedPr(s) {
+  clearTimeout(s.goneTimer);
+  s.goneTimer = null;
   s.panel?.remove();
   s.panel = null;
   s.result = null;
+  browser.runtime.sendMessage({ type: "forget", owner: s.owner, repo: s.repo, number: s.number }).catch(() => {});
 }
 
 // A saved result for this PR, from an earlier visit or another tab.

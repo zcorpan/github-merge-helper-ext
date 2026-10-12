@@ -273,7 +273,15 @@ async function githubFetch(url, token, accept = "application/vnd.github+json") {
   if (!url.startsWith("https://api.github.com/")) throw new Error("Refusing non-GitHub API URL.");
   const headers = { Accept: accept, "X-GitHub-Api-Version": "2022-11-28" };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const response = await fetch(url, { method: "GET", headers, credentials: "omit", referrerPolicy: "no-referrer" });
+  const response = await fetch(url, {
+    method: "GET",
+    headers,
+    credentials: "omit",
+    referrerPolicy: "no-referrer",
+    // GitHub sends max-age=60; revalidate instead, so a PR that was just
+    // merged or pushed to isn't reported with its state from a minute ago.
+    cache: "no-cache",
+  });
   if (!response.ok) {
     if (response.status === 404) throw new Error("GitHub API 404. Private repo? Set a GitHub token in the extension settings.");
     if (response.status === 403 || response.status === 429) {
