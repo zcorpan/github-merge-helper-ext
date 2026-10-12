@@ -32,6 +32,10 @@ Request flow: content script → background script → GitHub REST API (read-onl
 
 Request shape changes need to land in both `src/background.js` and the allowlist in `native/host.py`.
 
+## Publishing every change
+
+After every change that affects the extension (`src/`, `manifest.json`, `build.mjs`, dependencies), commit it and run `npm run release` (patch bump by default), which signs it with AMO on the unlisted channel, publishes a GitHub release, and pushes `main`; installs auto-update from `updates.json`. The maintainer has authorized this for every change, so don't ask first. For changes that don't affect the extension (docs, tests, `native/`, `scripts/`), just push `main`. A release needs the AMO credentials in the Keychain (see README, "Releasing"); if they're missing, stop and say so.
+
 ## Security review on every change
 
 For any change to the code or new feature, check its impact on the security properties listed under "Security" in README.md, and fix any issues it introduces before calling the change done. Update that section if a property changes.

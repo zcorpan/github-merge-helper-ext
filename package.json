@@ -7,8 +7,9 @@
     "watch": "node build.mjs --watch",
     "test": "node --test \"test/*.test.js\"",
     "test:native": "native/.venv/bin/python -I -m unittest discover -s native",
-    "lint": "npm run build && web-ext lint -s dist",
+    "lint": "npm run build && web-ext lint -s dist --self-hosted",
     "package": "npm run build && web-ext build -s dist --overwrite-dest",
+    "release": "python3 -I scripts/release.py",
     "start": "npm run build && web-ext run -s dist -f nightly --start-url https://github.com/whatwg/html/pulls"
   },
   "license": "MIT",
