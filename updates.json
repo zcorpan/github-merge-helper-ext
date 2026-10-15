@@ -3,9 +3,9 @@
     "github-merge-helper@zcorpan": {
       "updates": [
         {
-          "version": "0.2.0",
-          "update_link": "https://github.com/zcorpan/github-merge-helper-ext/releases/download/v0.2.0/eac4046624b5472ca5b3-0.2.0.xpi",
-          "update_hash": "sha256:ed8573ab116352e08e4d2ef2cea856ec16ae812a9e840a6537cee1c4ca948a45"
+          "version": "0.2.1",
+          "update_link": "https://github.com/zcorpan/github-merge-helper-ext/releases/download/v0.2.1/github-merge-helper-0.2.1.xpi",
+          "update_hash": "sha256:ebe926b743935bb8462d7bd1253434c8bd2910d75aefcfd4ccdfde48f6aa6eb7"
         }
       ]
     }

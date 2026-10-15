@@ -1,6 +1,6 @@
 {
   "name": "github-merge-helper-ext",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Firefox extension that asks Claude to review or write the commit message when merging a GitHub PR",
   "scripts": {
     "build": "node build.mjs",
