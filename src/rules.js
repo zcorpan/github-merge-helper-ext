@@ -54,12 +54,14 @@ Based on the WHATWG committer guidelines (https://github.com/whatwg/meta/blob/ma
 - Title prefixes are case-sensitive; most commits have none:
   - "Editorial: " only if the change just fixes formatting or typos, or is a refactoring that does not change how the standard is understood. Bug fixes and clarifications are not editorial, even if they only affect non-normative text. A missing or wrong "Editorial: " is a real problem.
   - "Meta: " for changes that do not affect the text of the standard but the ecosystem around it, such as tooling, CI, or contributor documentation.
+  - "Review Draft Publication: " only for Review Draft publications.
   - The text after these prefixes usually starts lowercase ("Editorial: fix typo").
 - The title is at most 72 characters. This is a hard limit: a longer title is always a real problem, even if only slightly over. When fixing one, shorten it without losing what the change does.
 - The title is imperative ("Fix", "Allow", "Remove") and has no trailing period; past tense or a trailing period is a real problem.
-- Issues: use a closing keyword ("Fixes #N." or "Closes #N.") for issues this change resolves, and a non-closing reference ("Part of #N.", "Helps with #N.", "See #N.") for issues it only partly addresses. A description that says the change resolves an issue without a closing reference for it, or a closing reference for an issue it only partly addresses, is a real problem. Issues in other repositories use the owner/repo#N form.
-- Other reference lines seen in practice: "Tests: <URL>" for the change's tests (a web-platform-tests PR or other test change), "Follows <URL>", "Goes with <URL>", "Follow-up to #N", "This is a follow-up to <full SHA>.", "See also <URL>". Never require "Tests:" in review. When writing from scratch, include it if the PR description links the tests; when keeping the author's message, don't add one they didn't write.
-- Reference lines usually go at the end, each in its own paragraph, with "Tests:" before "Fixes"/"Closes".
+- Avoid backticks unless needed for disambiguation; this overrides the general rule that they're optional. Don't add them when writing, and remove them from lines you rewrite. In review, an author's backticks aren't a real problem; mention them in notes at most.
+- Issues: use a closing keyword ("Fixes #N." or "Closes #N."; prefer "Fixes" when writing) only for issues this change actually resolves, and a non-closing reference ("Part of #N.", "Helps with #N.", "See #N.") for issues it only partly addresses. A description that says the change resolves an issue without a closing reference for it, or a closing reference for an issue it only partly addresses, is a real problem. Issues in other repositories use the owner/repo#N form.
+- Other reference lines seen in practice: "Tests: <URL>." for the change's tests (a web-platform-tests PR or other test change), "Follows <URL>", "Goes with <URL>", "Follow-up to #N", "This is a follow-up to <full SHA>.", "See also <URL>". Never require "Tests:" in review. When writing from scratch, include it if the PR description links the tests; when keeping the author's message, don't add one they didn't write.
+- Reference lines go at the end of the description, each in its own paragraph, with "Tests: <URL>." before "Fixes #N.". When writing, end each with a period.
 - Squash and merge: the description should read as one coherent description, not a list of commits.
 
 Examples of accepted messages:
@@ -77,17 +79,17 @@ Ignore the form element pointer throughout template contents
 
 The form element pointer is deliberately not used inside template
 contents, but the conditions expressing that only tested the stack of
-open elements. A fragment parse whose context element is a \`template\`
-element produces template contents without ever pushing a \`template\`
+open elements. A fragment parse whose context element is a template
+element produces template contents without ever pushing a template
 element onto that stack, so the pointer was seeded from the context
-element's ancestors and then used: a nested \`<form>\` was dropped, and
+element's ancestors and then used: a nested form was dropped, and
 controls could be associated with a form outside the template.
 
 Introduce "parsing template contents", which covers that case as well,
-and use it for the \`<form>\` start and end tags and when associating a
+and use it for the form start and end tags and when associating a
 control with the form element pointer.
 
-Tests: https://github.com/web-platform-tests/wpt/pull/62488
+Tests: https://github.com/web-platform-tests/wpt/pull/62488.
 
 Fixes #12257.
 </example>
