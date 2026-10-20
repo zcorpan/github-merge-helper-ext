@@ -24,7 +24,8 @@ Real problems:
 - Leftovers from the PR description or GitHub: template checklists, HTML comments, preview links, Markdown headings, images, or links in [text](url) form, and GitHub's default squash list of commit subjects ("* Small clean up", "* Address review").
 - Content about the review process rather than the change ("Address review comments", "Rebase").
 - A title that doesn't describe the change ("Add test", "Fixes"), is cut off mid-sentence, is too long (over about 90 characters, or over the repository's hard limit), or contains a pull request reference such as "(#123)".
-- A description that misdescribes the change, or contradicts the diff.
+- A message that misdescribes the change: claims something the diff doesn't do, contradicts it, or leaves out a significant behavior change. Check the message against the diff, not just the PR description. If the diff is truncated, only flag what the visible part contradicts.
+- Rationale dropped: the PR description explains why the change is made (the problem, motivation, browser behavior, compatibility), and the message leaves out the substance of it, unless the title alone makes the reason obvious.
 - Missing or wrong issue references, per the repository rules.`;
 
 // How to write a message (squash mode, or fixing one in review mode). The
@@ -46,7 +47,10 @@ Always:
 - Never put a pull request reference such as "(#123)" in the title.
 - Do not output Co-authored-by or other trailers; they are added automatically.
 - Never invent issue numbers, URLs, SHAs, or facts. Everything referenced must come from the PR title, description, or commits.
-- Use the PR description's prose, but not its template boilerplate, checklists, HTML comments, or preview links, except for information worth keeping as described in the repository rules.`;
+- Use the PR description's prose, but not its template boilerplate, checklists, HTML comments, or preview links, except for information worth keeping as described in the repository rules.
+- Keep the rationale. When the PR description or commits explain why the change is made, carry the substance of that into the description; shorten it if needed, but don't drop it.
+- Describe the actual change, as shown by the diff. Where the author's message, the PR description, or earlier commits no longer match the final diff, follow the diff.
+- Before answering, review your draft as you would review someone else's message (see "Reviewing a message" and the repository rules): it matches the diff, keeps the rationale, and introduces no new problems (changed meaning, typos, wrong or missing references, wrong title prefix, title over the limit or ending in a period). In review mode, also check that your fixes don't change anything that wasn't a problem. Fix whatever you find before answering.`;
 
 const WHATWG_RULES = `\
 Based on the WHATWG committer guidelines (https://github.com/whatwg/meta/blob/main/COMMITTING.md) and how they're applied in practice:
