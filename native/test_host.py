@@ -62,6 +62,21 @@ class ValidatedParams(unittest.TestCase):
         self.assertFalse(any(name.startswith("ANTHROPIC_") for name in host.os.environ))
 
 
+class UpToDate(unittest.TestCase):
+    def test_installed_packages_match_the_pins(self):
+        self.assertEqual(host.outdated_packages(), [])
+
+    def test_mismatched_package_is_outdated(self):
+        original = host.importlib.metadata.version
+        host.importlib.metadata.version = lambda name: "0.0.0" if name == "anthropic" else original(name)
+        try:
+            self.assertEqual(host.outdated_packages(), ["anthropic"])
+            with self.assertRaises(host.Outdated):
+                host.check_up_to_date({"type": "ping"})
+        finally:
+            host.importlib.metadata.version = original
+
+
 class Framing(unittest.TestCase):
     def run_host(self, message):
         data = json.dumps(message).encode()
@@ -75,7 +90,21 @@ class Framing(unittest.TestCase):
         return json.loads(result.stdout[4 : 4 + length])
 
     def test_unknown_type(self):
-        self.assertEqual(self.run_host({"type": "exfiltrate"}), {"ok": False, "error": {"message": "Unknown request type."}})
+        self.assertEqual(
+            self.run_host({"type": "exfiltrate"}),
+            {"ok": False, "error": {"message": "Unknown request type."}, "hostVersion": host.HOST_VERSION},
+        )
+
+    def test_newer_extension_is_told_to_update_before_any_api_call(self):
+        reply = self.run_host({"type": "messages", "params": good_params(), "minHostVersion": host.HOST_VERSION + 1})
+        self.assertEqual(reply["hostVersion"], host.HOST_VERSION)
+        self.assertFalse(reply["ok"])
+        self.assertTrue(reply["error"]["outdated"])
+        self.assertIn("python3 native/install.py", reply["error"]["message"])
+
+    def test_rejects_bad_min_host_version(self):
+        reply = self.run_host({"type": "ping", "minHostVersion": "1"})
+        self.assertEqual(reply["error"], {"message": "Invalid minHostVersion."})
 
     def test_invalid_request_is_rejected_before_reading_the_key(self):
         reply = self.run_host({"type": "messages", "params": good_params(tools=[])})

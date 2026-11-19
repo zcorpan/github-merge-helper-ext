@@ -5,6 +5,10 @@ import { DEFAULTS } from "./defaults.js";
 // Name of the native messaging host installed by native/install.py, which holds
 // the API key and makes the request (browser requests are blocked for some orgs).
 const NATIVE_HOST = "github_merge_helper";
+// The oldest native helper this version works with (HOST_VERSION in
+// native/host.py; bump both together). Older ones are told to update.
+const MIN_HOST_VERSION = 1;
+const HOST_UPDATE = "In your github-merge-helper-ext checkout, run `git pull` and `python3 native/install.py`.";
 const MAX_DIFF_CHARS = 300_000;
 const MAX_CONTRIBUTING_CHARS = 30_000;
 
@@ -241,13 +245,18 @@ class HostError extends Error {
 async function callHost(message) {
   let reply;
   try {
-    reply = await browser.runtime.sendNativeMessage(NATIVE_HOST, message);
+    reply = await browser.runtime.sendNativeMessage(NATIVE_HOST, { ...message, minHostVersion: MIN_HOST_VERSION });
   } catch (e) {
     const error = new Error(
-      `Couldn't start the native helper (${e?.message ?? e}). Run \`python3 native/install.py\` from the extension's source directory, then restart Firefox.`,
+      `Couldn't start the native helper (${e?.message ?? e}), which calls Claude for the extension. Clone https://github.com/zcorpan/github-merge-helper-ext, run \`python3 native/install.py\` in it, then restart Firefox.`,
     );
     error.needsSetup = true;
     throw error;
+  }
+  // Helpers from before the version check don't send hostVersion.
+  if (reply?.error?.outdated) throw new Error(String(reply.error.message));
+  if (typeof reply?.hostVersion !== "number" || reply.hostVersion < MIN_HOST_VERSION) {
+    throw new Error(`The native helper is out of date. ${HOST_UPDATE}`);
   }
   if (!reply?.ok) throw new HostError(reply?.error ?? {});
   return reply;

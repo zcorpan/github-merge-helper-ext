@@ -9,12 +9,14 @@ so it is checked against a strict allowlist: no tools, a single user message,
 a fixed endpoint, size caps. The key is never sent back to the extension.
 """
 
+import importlib.metadata
 import json
 import os
 import re
 import struct
 import subprocess
 import sys
+from pathlib import Path
 
 # Don't let the browser's environment redirect requests or add credentials.
 for _name in [n for n in os.environ if n.startswith("ANTHROPIC_")]:
@@ -33,9 +35,48 @@ ALLOWED_EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 ALLOWED_BETAS = {"server-side-fallback-2026-07-01"}
 MODEL_PATTERN = re.compile(r"^claude-[a-z0-9-]{1,60}$")
 
+# Bump when the extension starts relying on new behavior here, together with
+# MIN_HOST_VERSION in src/background.js. Sent with every reply.
+HOST_VERSION = 1
+REQUIREMENTS = Path(__file__).resolve().with_name("requirements.txt")
+UPDATE_HINT = "In your github-merge-helper-ext checkout, run `git pull` and `python3 native/install.py`."
+
 
 class InvalidRequest(Exception):
     pass
+
+
+class Outdated(InvalidRequest):
+    """This helper (or its installed packages) is older than the extension needs."""
+
+
+def outdated_packages():
+    """Pinned packages whose installed version differs: requirements.txt changed
+    in a `git pull`, but install.py wasn't re-run."""
+    wrong = []
+    for line in REQUIREMENTS.read_text().splitlines():
+        line = line.split("#", 1)[0].strip()
+        if "==" not in line:
+            continue
+        name, version = (part.strip() for part in line.split("==", 1))
+        try:
+            installed = importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            installed = None
+        if installed != version:
+            wrong.append(name)
+    return wrong
+
+
+def check_up_to_date(message):
+    needed = message.get("minHostVersion", 0)
+    if type(needed) is not int:
+        raise InvalidRequest("Invalid minHostVersion.")
+    if needed > HOST_VERSION:
+        raise Outdated(f"The native helper is out of date (version {HOST_VERSION}; the extension needs {needed}). {UPDATE_HINT}")
+    wrong = outdated_packages()
+    if wrong:
+        raise Outdated(f"The native helper's packages are out of date ({', '.join(wrong)}). {UPDATE_HINT}")
 
 
 def read_message():
@@ -49,7 +90,7 @@ def read_message():
 
 
 def send_message(message):
-    data = json.dumps(message).encode("utf-8")
+    data = json.dumps({**message, "hostVersion": HOST_VERSION}).encode("utf-8")
     sys.stdout.buffer.write(struct.pack("=I", len(data)))
     sys.stdout.buffer.write(data)
     sys.stdout.buffer.flush()
@@ -138,6 +179,10 @@ def handle(message):
     if not isinstance(message, dict):
         raise InvalidRequest("Invalid request.")
     kind = message.get("type")
+    if kind not in ("ping", "messages"):
+        raise InvalidRequest("Unknown request type.")
+    # Before anything that reads the key or calls the API.
+    check_up_to_date(message)
     if kind == "ping":
         # Free request to check the key works.
         client().models.list(limit=1)
@@ -166,6 +211,8 @@ def error_reply(e):
         return {"ok": False, "error": {"status": e.status_code, "type": getattr(e, "type", None), "message": detail, "request_id": e.request_id}}
     if isinstance(e, anthropic.APIConnectionError):
         return {"ok": False, "error": {"message": "Couldn't reach the Claude API."}}
+    if isinstance(e, Outdated):
+        return {"ok": False, "error": {"message": str(e), "outdated": True}}
     if isinstance(e, InvalidRequest):
         return {"ok": False, "error": {"message": str(e)}}
     print(f"github-merge-helper host: {type(e).__name__}", file=sys.stderr)
