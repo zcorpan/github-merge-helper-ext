@@ -37,6 +37,18 @@
         "https://github.com/*"
       ],
       "js": [
+        "redirect.js"
+      ],
+      "css": [
+        "redirect.css"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://github.com/*"
+      ],
+      "js": [
         "content.js"
       ],
       "css": [

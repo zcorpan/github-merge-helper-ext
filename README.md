@@ -15,7 +15,7 @@ Without Claude, the extension also cleans up GitHub's default squash title when 
 
 The button is there whenever GitHub shows a merge button, even while GitHub has it disabled (e.g. while checking whether the PR can be merged, with merge conflicts, or without write access, where GitHub shows an inactive merge button too). If the extension finds GitHub's merge method menu but not the merge button next to it (GitHub changed its markup), it logs a warning to the console.
 
-Unrelated to merging: an issue reference typed as a URL, like `github.com/whatwg/html#123`, goes to `github.com/whatwg/html/issues/123` (GitHub then redirects PRs to `/pull/123`). It doesn't when the README has a heading with that anchor (e.g. `## 2024`).
+Unrelated to merging: an issue reference typed as a URL, like `github.com/whatwg/html#123`, goes to `github.com/whatwg/html/issues/123` (GitHub then redirects PRs to `/pull/123`), while the repository page is still loading and hidden. Punctuation copied along with it, as in `github.com/whatwg/html#123),`, is ignored. It doesn't redirect when the README has a heading with that anchor (e.g. `## 2024`), unless there's trailing punctuation, which heading anchors never have.
 
 ## Rules
 

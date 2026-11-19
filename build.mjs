@@ -6,12 +6,12 @@ const outdir = "dist";
 
 await rm(outdir, { recursive: true, force: true });
 await mkdir(outdir);
-for (const file of ["manifest.json", "src/content.css", "src/options.html", "src/options.css"]) {
+for (const file of ["manifest.json", "src/content.css", "src/redirect.css", "src/options.html", "src/options.css"]) {
   await cp(file, `${outdir}/${file.split("/").pop()}`);
 }
 
 const options = {
-  entryPoints: ["src/background.js", "src/content.js", "src/options.js"],
+  entryPoints: ["src/background.js", "src/content.js", "src/redirect.js", "src/options.js"],
   outdir,
   bundle: true,
   format: "iife",

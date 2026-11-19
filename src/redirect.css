@@ -1,0 +1,4 @@
+/* While redirect.js decides whether to redirect, skip layout and paint. */
+html[data-gmh-redirect] {
+  display: none !important;
+}

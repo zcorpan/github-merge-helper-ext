@@ -8,7 +8,6 @@
 // invisible characters. Clicks synthesized by page scripts are ignored.
 
 import { checkMessage, cleanTrailer, issueLinks, stripInvisible, stripPrRef, titleLimit, validPullRef } from "./safety.js";
-import { issueRefPath } from "./issueref.js";
 
 const MERGE_LABEL =
   /^(?:Merge pull request|Squash and merge|Rebase and merge|Enable auto-merge(?: \(\w+\))?|Confirm (?:merge|squash and merge|rebase and merge|auto-merge(?: \(\w+\))?))$/i;
@@ -808,11 +807,3 @@ window.addEventListener("pageshow", (event) => {
 });
 check();
 
-// github.com/owner/repo#91 goes to the issue or PR. replace() keeps the
-// redirecting URL out of history, so going back doesn't loop.
-function followIssueRef() {
-  const path = issueRefPath(location.pathname, location.hash, document);
-  if (path) location.replace(path);
-}
-window.addEventListener("hashchange", followIssueRef);
-followIssueRef();
