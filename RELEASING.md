@@ -1,6 +1,6 @@
 # Releasing to AMO
 
-The add-on is listed on AMO: https://addons.mozilla.org/firefox/addon/github-merge-helper/ (add-on ID `github-merge-helper@zcorpan`). Installs update from AMO. Every version is reviewed there, and its source package is uploaded with it, since `dist/` is bundled (see [BUILD.md](BUILD.md)).
+The add-on is listed on AMO: https://addons.mozilla.org/firefox/addon/github-merge-helper-ext/ (add-on ID `github-merge-helper@zcorpan`). Installs update from AMO. Every version is reviewed there, and its source package is uploaded with it, since `dist/` is bundled (see [BUILD.md](BUILD.md)).
 
 ## One-time setup
 
@@ -28,7 +28,9 @@ npm run release            # patch; or: npm run release -- minor
 5. submits `dist/` to the listed channel with `web-ext sign`, along with the source package and `amo/listing.json` (summary, description, categories, license, reviewer notes, plus the source commit);
 6. tags, pushes, and creates a GitHub release with the notes.
 
-It doesn't wait for review, so it may take a while before the version shows up on AMO. The version must be higher than any AMO has seen, including rejected ones; for a release in between, use a fourth component (`0.4.0.1`). If submission fails, the script undoes the release commit and the version bump.
+It doesn't wait for review, so it may take a while before the version shows up on AMO. The version must be higher than any AMO has seen, including rejected ones; for a release in between, use a fourth component (`0.4.0.1`). If submission fails, the script asks AMO whether it got the version anyway. If not, it undoes the release commit and the version bump; if so, the number is used up, so it keeps the commit and prints the commands to finish by hand.
+
+AMO throttles API writes, sometimes for many minutes. The scripts wait out short throttles and stop on long ones (it says how long); rerun later.
 
 Before submitting, check the package contents:
 
@@ -44,7 +46,7 @@ To check that the source package rebuilds the submission: unzip it in an empty d
 
 ```sh
 python3 -I scripts/amo_listing.py --dry-run
-python3 -I scripts/amo_listing.py
+python3 -I scripts/amo_listing.py              # or only some: policy icon screenshots
 ```
 
 Screenshots must not show personal data: replace the commit author's email in the merge dialog, and hide avatars.

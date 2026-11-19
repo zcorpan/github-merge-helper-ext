@@ -1,5 +1,5 @@
 {
-  "slug": "github-merge-helper",
+  "slug": "github-merge-helper-ext",
   "summary": {
     "en-US": "Asks Claude to review or write the commit message when you merge a GitHub pull request. Needs a small native helper and your own Claude API key."
   },

@@ -46,7 +46,7 @@ npm run watch      # rebuild on change
 
 ### 1. The extension
 
-Install [GitHub Merge Helper from addons.mozilla.org](https://addons.mozilla.org/firefox/addon/github-merge-helper/). Firefox keeps it up to date.
+Install [GitHub Merge Helper from addons.mozilla.org](https://addons.mozilla.org/firefox/addon/github-merge-helper-ext/). Firefox keeps it up to date.
 
 For development, instead:
 

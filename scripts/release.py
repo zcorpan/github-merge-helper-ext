@@ -21,9 +21,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from amo_api import Client, credentials  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent.parent
 REPO = "zcorpan/github-merge-helper-ext"
-KEYCHAIN_SERVICE = "github-merge-helper-amo"
 ARTIFACTS = ROOT / "web-ext-artifacts"
 
 
@@ -31,18 +33,6 @@ def run(*cmd, env=None, capture=False):
     print("+", " ".join(cmd), flush=True)
     result = subprocess.run(cmd, cwd=ROOT, env=env, check=True, text=True, capture_output=capture)
     return result.stdout.strip() if capture else None
-
-
-def keychain(account):
-    result = subprocess.run(
-        ["/usr/bin/security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", account, "-w"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0 or not result.stdout.strip():
-        sys.exit(f"No AMO {account} in the keychain (service {KEYCHAIN_SERVICE}). See README, \"Releasing\".")
-    return result.stdout.strip()
 
 
 def bumped(version, level):
@@ -80,7 +70,8 @@ def main():
 
     check_clean_main()
     # Passed to web-ext through the environment, never on a command line.
-    env = {**os.environ, "WEB_EXT_API_KEY": keychain("jwt-issuer"), "WEB_EXT_API_SECRET": keychain("jwt-secret")}
+    creds = credentials()
+    env = {**os.environ, "WEB_EXT_API_KEY": creds[0], "WEB_EXT_API_SECRET": creds[1]}
 
     manifest_path = ROOT / "manifest.json"
     manifest = json.loads(manifest_path.read_text())
@@ -120,7 +111,15 @@ def main():
             env=env,
         )
     except BaseException:
-        # Nothing was submitted (or the submission failed); undo the release commit and the version bump.
+        # If AMO got the version anyway (e.g. web-ext failed after creating it),
+        # its number is used up: keep the release commit and finish by hand.
+        if committed and Client(creds).version(new):
+            sys.exit(
+                f"web-ext sign failed, but AMO has version {new}. Check it (and its source package) at "
+                f"https://addons.mozilla.org/en-US/developers/addon/github-merge-helper-ext/versions, then finish with: "
+                f"git tag -a v{new} -m 'Version {new}' && git push origin v{new} main && gh release create v{new} --repo {REPO} --title {new} --generate-notes"
+            )
+        # Nothing was submitted; undo the release commit and the version bump.
         if committed:
             subprocess.run(["git", "reset", "-q", "--soft", "HEAD~1"], cwd=ROOT, check=False)
             subprocess.run(["git", "restore", "--staged", "manifest.json", "package.json", "package-lock.json"], cwd=ROOT, check=False)
@@ -131,7 +130,7 @@ def main():
     run("git", "push", "-q", "origin", f"v{new}")
     run("gh", "release", "create", f"v{new}", "--repo", REPO, "--title", new, "--notes", release_notes(new))
     run("git", "push", "-q", "origin", "main")
-    print(f"Submitted {new} to AMO: https://addons.mozilla.org/en-US/developers/addon/github-merge-helper/versions")
+    print(f"Submitted {new} to AMO: https://addons.mozilla.org/en-US/developers/addon/github-merge-helper-ext/versions")
 
 
 if __name__ == "__main__":
