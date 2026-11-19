@@ -1,30 +1,28 @@
-"""Sign a new version with AMO (unlisted) and publish it on GitHub Releases.
+"""Submit a new version to AMO (listed) and publish release notes on GitHub.
 
     python3 -I scripts/release.py [patch|minor|major]   (default: patch)
 
-Firefox installs that have the extension pick up the new version through
-`update_url` in manifest.json, which points at updates.json on main.
+Bumps the version, runs the tests and lint, commits "Release X.Y.Z", then
+submits dist/ with the source package (scripts/source-zip.py) and the listing
+metadata (amo/listing.json, with the source commit added to the reviewer
+notes) to AMO's listed channel. AMO reviews it and installs update from AMO.
+It doesn't wait for approval. Then it tags, pushes, and creates a GitHub
+release with the notes. See RELEASING.md.
 
 Needs AMO API credentials in the macOS Keychain (see README, "Releasing"),
 `gh` logged in with push access, and a clean, up-to-date main.
-
-Order matters: the signed .xpi is attached to the GitHub release before main
-(with the new updates.json) is pushed, so updates.json never points at a file
-that doesn't exist yet.
 """
 
 import argparse
-import hashlib
 import json
 import os
-import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 REPO = "zcorpan/github-merge-helper-ext"
-ADDON_ID = "github-merge-helper@zcorpan"
 KEYCHAIN_SERVICE = "github-merge-helper-amo"
 ARTIFACTS = ROOT / "web-ext-artifacts"
 
@@ -88,7 +86,10 @@ def main():
     manifest = json.loads(manifest_path.read_text())
     new = bumped(manifest["version"], args.level)
     print(f"Releasing {manifest['version']} -> {new}")
+    ARTIFACTS.mkdir(exist_ok=True)
+    source = ARTIFACTS / f"github-merge-helper-source-{new}.zip"
 
+    committed = False
     try:
         manifest["version"] = new
         manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
@@ -99,41 +100,38 @@ def main():
             run("npm", "run", "test:native")
         run("npm", "run", "lint")
 
-        run("npx", "web-ext", "sign", "--channel", "unlisted", "--source-dir", "dist", "--artifacts-dir", str(ARTIFACTS), env=env)
+        # Commit first, so the source package and the reviewer notes name an exact commit.
+        run("git", "add", "manifest.json", "package.json", "package-lock.json")
+        run("git", "commit", "-q", "-m", f"Release {new}")
+        committed = True
+        commit = run("git", "rev-parse", "HEAD", capture=True)
+        run(sys.executable, "-I", str(ROOT / "scripts" / "source-zip.py"), str(source))
+
+        metadata = json.loads((ROOT / "amo" / "listing.json").read_text())
+        metadata["version"]["approval_notes"] += (
+            f"\n\nThis version's source: commit {commit} (https://github.com/{REPO}/commit/{commit}), tag v{new}."
+        )
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump(metadata, f)
+        run(
+            "npx", "web-ext", "sign", "--channel", "listed", "--approval-timeout", "0",
+            "--source-dir", "dist", "--artifacts-dir", str(ARTIFACTS),
+            "--amo-metadata", f.name, "--upload-source-code", str(source),
+            env=env,
+        )
     except BaseException:
-        # Nothing was published yet; undo the version bump.
+        # Nothing was submitted (or the submission failed); undo the release commit and the version bump.
+        if committed:
+            subprocess.run(["git", "reset", "-q", "--soft", "HEAD~1"], cwd=ROOT, check=False)
+            subprocess.run(["git", "restore", "--staged", "manifest.json", "package.json", "package-lock.json"], cwd=ROOT, check=False)
         subprocess.run(["git", "checkout", "--", "manifest.json", "package.json", "package-lock.json"], cwd=ROOT, check=False)
         raise
 
-    xpis = sorted(ARTIFACTS.glob(f"*-{new}.xpi"), key=lambda p: p.stat().st_mtime)
-    if not xpis:
-        sys.exit(f"web-ext sign didn't produce a {new} .xpi in {ARTIFACTS}.")
-    # AMO names the file after an internal ID; give the release asset a readable name.
-    xpi = ARTIFACTS / f"github-merge-helper-{new}.xpi"
-    shutil.copyfile(xpis[-1], xpi)
-    digest = hashlib.sha256(xpi.read_bytes()).hexdigest()
-    updates = {
-        "addons": {
-            ADDON_ID: {
-                "updates": [
-                    {
-                        "version": new,
-                        "update_link": f"https://github.com/{REPO}/releases/download/v{new}/{xpi.name}",
-                        "update_hash": f"sha256:{digest}",
-                    }
-                ]
-            }
-        }
-    }
-    (ROOT / "updates.json").write_text(json.dumps(updates, indent=2) + "\n")
-
-    run("git", "add", "manifest.json", "package.json", "package-lock.json", "updates.json")
-    run("git", "commit", "-q", "-m", f"Release {new}")
     run("git", "tag", "-a", f"v{new}", "-m", f"Version {new}")
     run("git", "push", "-q", "origin", f"v{new}")
-    run("gh", "release", "create", f"v{new}", str(xpi), "--repo", REPO, "--title", new, "--notes", release_notes(new))
+    run("gh", "release", "create", f"v{new}", "--repo", REPO, "--title", new, "--notes", release_notes(new))
     run("git", "push", "-q", "origin", "main")
-    print(f"Released {new}: https://github.com/{REPO}/releases/tag/v{new}")
+    print(f"Submitted {new} to AMO: https://addons.mozilla.org/en-US/developers/addon/github-merge-helper/versions")
 
 
 if __name__ == "__main__":

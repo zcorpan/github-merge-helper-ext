@@ -5,3 +5,4 @@ native/.venv/
 __pycache__/
 tmp/
 .DS_Store
+.amo-upload-uuid

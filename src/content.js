@@ -305,6 +305,8 @@ function buttonLabel({ kind, merge }) {
   return "Write commit message";
 }
 
+const REQUEST_LABELS = new Set(["Review commit message", "Write squash commit message", "Write commit message"]);
+
 function syncButton(kind, surface) {
   const label = surface ? buttonLabel(surface) : null;
   let button = state.buttons[kind];
@@ -317,6 +319,10 @@ function syncButton(kind, surface) {
   if (button.previousElementSibling !== anchor) anchor.after(button);
   styleLike(button, surface.merge);
   setText(button.gmhLabel, label);
+  // Says where the PR goes before it's sent (labels describe the action only).
+  const sends = REQUEST_LABELS.has(label);
+  const title = sends ? "Sends this PR's title, description, commits, and diff to Claude (Anthropic) via the native helper" : "";
+  if (button.title !== title) button.title = title;
   setDisabled(button, state.loading);
 }
 
@@ -592,7 +598,7 @@ function showResult(edits = null) {
       "div",
       { className: "gmh-footer" },
       h("div", { className: "gmh-actions" }, fillButton, copyButton, regenerateButton, undoButton),
-      h("p", { className: "gmh-model" }, `${model}. Claude's answer can be influenced by text in the PR; read it before merging.`),
+      h("p", { className: "gmh-model" }, `${model}, given this PR's title, description, commits, and diff via the native helper. Claude's answer can be influenced by text in the PR; read it before merging.`),
     ),
   );
   panel.gmh = { title, body, fillButton, undoButton, resize };

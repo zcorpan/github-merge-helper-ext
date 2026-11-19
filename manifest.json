@@ -3,6 +3,11 @@
   "name": "GitHub Merge Helper",
   "version": "0.3.2",
   "description": "Asks Claude to review or write the commit message when merging a GitHub pull request.",
+  "homepage_url": "https://github.com/zcorpan/github-merge-helper-ext",
+  "icons": {
+    "48": "icon.svg",
+    "96": "icon.svg"
+  },
   "browser_specific_settings": {
     "gecko": {
       "id": "github-merge-helper@zcorpan",
@@ -11,13 +16,11 @@
         "required": [
           "websiteContent"
         ]
-      },
-      "update_url": "https://raw.githubusercontent.com/zcorpan/github-merge-helper-ext/main/updates.json"
+      }
     }
   },
   "permissions": [
     "storage",
-    "clipboardWrite",
     "nativeMessaging"
   ],
   "host_permissions": [

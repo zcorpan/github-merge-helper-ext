@@ -44,11 +44,24 @@ npm run watch      # rebuild on change
 
 ## Install
 
-### 1. The native helper
+### 1. The extension
 
-From this directory:
+Install [GitHub Merge Helper from addons.mozilla.org](https://addons.mozilla.org/firefox/addon/github-merge-helper/). Firefox keeps it up to date.
+
+For development, instead:
+
+- **Temporary (any Firefox):** go to `about:debugging#/runtime/this-firefox`, click "Load Temporary Add-on…", and pick the `manifest.json` file inside `dist/` (not the folder). It stays until Firefox restarts. `npm start` does the same in Firefox Nightly with a fresh profile, which isn't logged in to GitHub.
+- **Unsigned (Firefox Nightly or Developer Edition):** set `xpinstall.signatures.required` to `false` in `about:config`, run `npm run package`, then go to `about:addons` → gear menu → "Install Add-on From File…" and pick the zip in `web-ext-artifacts/`.
+
+On install, Firefox asks for access to `github.com` and `api.github.com`, and to "exchange messages with programs other than Firefox" (the native helper). If you load it temporarily and the button doesn't show up, check that these are allowed under the add-on's Permissions tab in `about:addons`.
+
+### 2. The native helper
+
+The extension calls Claude through a small helper program. From a checkout of this repository (macOS or Linux, Python 3.10 or later):
 
 ```sh
+git clone https://github.com/zcorpan/github-merge-helper-ext
+cd github-merge-helper-ext
 python3 native/install.py
 ```
 
@@ -59,33 +72,11 @@ This creates a virtualenv in `native/.venv` with the pinned `anthropic` Python p
 
 The registration points at this checkout, so don't move or delete the directory afterwards (or re-run the installer if you do). Restart Firefox after installing.
 
-### 2. The extension
-
-Install the signed `.xpi` from the [latest release](https://github.com/zcorpan/github-merge-helper-ext/releases/latest) (click the `.xpi` asset; Firefox asks to install it). It's signed by addons.mozilla.org as an unlisted add-on, so it works in any Firefox, and it updates itself: Firefox checks [`updates.json`](updates.json) (the manifest's `update_url`) and installs new releases automatically.
-
-For development, instead:
-
-- **Temporary (any Firefox):** go to `about:debugging#/runtime/this-firefox`, click "Load Temporary Add-on…", and pick the `manifest.json` file inside `dist/` (not the folder). It stays until Firefox restarts. `npm start` does the same in Firefox Nightly with a fresh profile, which isn't logged in to GitHub.
-- **Unsigned (Firefox Nightly or Developer Edition):** set `xpinstall.signatures.required` to `false` in `about:config`, run `npm run package`, then go to `about:addons` → gear menu → "Install Add-on From File…" and pick the zip in `web-ext-artifacts/`.
-
-On install, Firefox asks for access to `github.com` and `api.github.com`, and to "exchange messages with programs other than Firefox" (the native helper). If you load it temporarily and the button doesn't show up, check that these are allowed under the add-on's Permissions tab in `about:addons`.
+To update it, run `git pull` and `python3 native/install.py` in the checkout. The extension tells you when that's needed: if the helper is older than the extension expects, or its installed packages don't match `native/requirements.txt`, clicking the button shows the commands instead of calling Claude.
 
 ## Releasing
 
-Releases are signed by addons.mozilla.org on the unlisted channel (not publicly listed) and published as GitHub releases. One-time setup: create AMO API credentials at <https://addons.mozilla.org/developers/addon/api/key/> and store them in the macOS Keychain, in a terminal (each command prompts for the value, so it stays out of your shell history):
-
-```sh
-security add-generic-password -U -s github-merge-helper-amo -a jwt-issuer -w
-security add-generic-password -U -s github-merge-helper-amo -a jwt-secret -w
-```
-
-Then, on a clean, up-to-date `main`:
-
-```sh
-npm run release            # patch version; or: npm run release -- minor
-```
-
-[`scripts/release.py`](scripts/release.py) bumps the version, runs the tests and lint, has AMO sign the build, commits and tags the release, attaches the `.xpi` to a GitHub release, and pushes `main` with the new `updates.json`. Changes to `native/` aren't part of the `.xpi`: after those, re-run `python3 native/install.py`.
+See [RELEASING.md](RELEASING.md) (listed on AMO, source package, listing assets) and [BUILD.md](BUILD.md) (reproducible build).
 
 ## Settings
 
@@ -118,7 +109,7 @@ Anyone can open a PR, so the PR title, description, commit messages, author name
 - **Nothing to exfiltrate, nowhere to send it.** The API key never enters the browser: it's in the OS keychain and only the native helper reads it. The GitHub token is never put in the prompt. A content security policy limits the extension's pages to connecting to `api.github.com`, and the content script makes no network requests at all.
 - **The native helper only does one thing.** [`native/host.py`](native/host.py) rebuilds each request from an allowlist (model, a single user text message, system prompt, JSON output format, effort, max tokens) and rejects anything else, such as tools, files, or other endpoints. It always talks to `https://api.anthropic.com`, ignoring `ANTHROPIC_*` environment variables (e.g. a gateway `ANTHROPIC_BASE_URL` you use for other tools), and it never returns the key. The worst a caller can do is spend your API credit on ordinary text requests.
 - **Who can start the helper.** Firefox only starts it for the extension ID in the host manifest, `github-merge-helper@zcorpan`. Extension IDs are self-declared, but this ID is registered to this add-on on AMO, so no other signed extension can use it. The installer pins exact versions of `anthropic` and its dependencies and installs wheels only, so no package build code runs; the launcher it writes quotes its paths.
-- **Updates are signed.** Installs update themselves from `updates.json` on `main`, but Firefox only installs an update that AMO signed for this add-on ID, so pushing to the repository alone can't ship code; it also takes the maintainer's AMO credentials. `updates.json` also pins each `.xpi`'s SHA-256.
+- **Updates are reviewed and signed.** The add-on is hosted on AMO, which reviews each version (with its source package) and signs it for this add-on ID; installs only take updates from there. Pushing to the repository alone can't ship code; it also takes the maintainer's AMO credentials.
 - **What's out of scope.** Any program running as your user can read the key from the keychain (as with any locally stored credential) or change the helper's files. The helper honors standard proxy environment variables such as `HTTPS_PROXY`, so a proxy you've configured system-wide sees the (TLS-encrypted) traffic.
 - **Checks that don't rely on the model**, shown in the panel under "Checked by the extension, not by Claude":
   - every issue the message will close when merged (`Fixes #N`, `closes owner/repo#N`, issue URLs),

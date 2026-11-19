@@ -1,0 +1,24 @@
+{
+  "slug": "github-merge-helper",
+  "summary": {
+    "en-US": "Asks Claude to review or write the commit message when you merge a GitHub pull request. Needs a small native helper and your own Claude API key."
+  },
+  "description": {
+    "en-US": "Adds a button next to the merge button on GitHub pull requests that asks Claude to review the commit message (one commit) or write a squash commit message (several commits), following the repository's commit message rules. You can read and edit the suggestion, then fill it into GitHub's commit form. You always confirm the merge yourself.\n\n**Requires a native helper and a Claude API key.** The Claude API is called by a small helper program that keeps your API key in the macOS Keychain or the Linux keyring, outside the browser. Install it from the source repository (macOS or Linux, Python 3):\n\n    git clone https://github.com/zcorpan/github-merge-helper-ext\n    python3 github-merge-helper-ext/native/install.py\n\nIf the extension says the helper is out of date, run `git pull` and `python3 native/install.py` in that checkout.\n\n**What it sends:** only when you click its button, the pull request's title, description, commit messages, and diff go to the Anthropic API (Claude) with your key. It also makes read-only requests to api.github.com to get that data. No analytics. See the privacy policy.\n\nWithout Claude, it also removes the \"(#123)\" GitHub adds to the default squash commit title (can be turned off), and fixes up GitHub URLs pasted with trailing punctuation or as owner/repo#123."
+  },
+  "categories": {
+    "firefox": [
+      "web-development"
+    ]
+  },
+  "homepage": {
+    "en-US": "https://github.com/zcorpan/github-merge-helper-ext"
+  },
+  "support_url": {
+    "en-US": "https://github.com/zcorpan/github-merge-helper-ext/issues"
+  },
+  "version": {
+    "license": "MIT",
+    "approval_notes": "What it does: adds a button next to GitHub's merge button. On click, the background script fetches the PR from api.github.com (read-only, no cookies) and sends it to a native messaging host (\"github_merge_helper\"), which calls the Claude API with the user's key from the OS keychain. The suggestion is shown as text and can be filled into GitHub's commit form; the extension never submits forms or clicks GitHub's buttons.\n\nPermissions: storage (settings, saved suggestions for 30 days), nativeMessaging (the helper above; the key never enters the browser), host permission api.github.com (read-only PR data), content scripts on github.com (the button and panel, and redirect.js, which only fixes up pasted URLs like github.com/owner/repo#123).\n\nSource: dist/ is bundled with esbuild (not minified) from src/. Build steps are in BUILD.md (npm ci && npm run build). Built on macOS with Node 24.11.0 and npm 11.21.0.\n\nTesting: needs the native helper (python3 native/install.py from the source package or the GitHub repository, macOS or Linux, Python 3.10+) and the reviewer's own Claude API key (https://platform.claude.com/settings/keys), which install.py stores in the OS keychain. The options page's \"Test connection\" checks the setup without a paid request. Without the helper, clicking the button shows an error panel explaining the setup; the URL fix-ups (redirect.js) and the squash title cleanup work without it."
+  }
+}
