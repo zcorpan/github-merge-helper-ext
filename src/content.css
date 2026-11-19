@@ -1,9 +1,12 @@
-.gmh-button,
-.gmh-action {
+/* Buttons normally copy GitHub's Primer classes at runtime (.gmh-primer); this
+   is the fallback when there's no GitHub button to copy from. */
+.gmh-button:not(.gmh-primer),
+.gmh-action:not(.gmh-primer) {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   padding: 0 12px;
-  height: 32px;
+  height: var(--control-medium-size, 32px);
   font: inherit;
   font-size: 14px;
   font-weight: 500;
@@ -11,76 +14,107 @@
   color: var(--button-default-fgColor-rest, var(--fgColor-default, #1f2328));
   background: var(--button-default-bgColor-rest, var(--bgColor-muted, #f6f8fa));
   border: 1px solid var(--button-default-borderColor-rest, var(--borderColor-default, #d1d9e0));
-  border-radius: 6px;
+  border-radius: var(--borderRadius-medium, 6px);
   cursor: pointer;
   white-space: nowrap;
 }
 
-.gmh-restore {
+.gmh-button:not(.gmh-primer)[data-size="small"],
+.gmh-action:not(.gmh-primer) {
+  height: var(--control-small-size, 28px);
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.gmh-button:not(.gmh-primer):hover:not(:disabled),
+.gmh-action:not(.gmh-primer):hover:not(:disabled) {
+  background: var(--button-default-bgColor-hover, var(--bgColor-neutral-muted, #eff2f5));
+}
+
+.gmh-button:not(.gmh-primer):disabled,
+.gmh-action:not(.gmh-primer):disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.gmh-button {
   flex: none;
-  align-self: center;
+  max-width: 100%;
+}
+
+/* GitHub's button row doesn't wrap; with ours added it may not fit (e.g. in
+   the side panel). */
+:has(> .gmh-button) {
+  flex-wrap: wrap;
+}
+
+/* Under the title field of GitHub's commit editor, like Primer's FormControl.Caption. */
+.gmh-caption {
+  margin-top: var(--base-size-4, 4px);
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--fgColor-muted, #59636e);
+}
+
+.gmh-link {
   padding: 0;
   font: inherit;
-  font-size: 12px;
   color: var(--fgColor-accent, #0969da);
   background: none;
   border: none;
   cursor: pointer;
 }
 
-.gmh-button {
-  height: auto;
-  min-height: 32px;
-  white-space: normal;
-  flex: none;
-  align-self: flex-start;
-  justify-content: center;
-  max-width: 100%;
+.gmh-link:hover {
+  text-decoration: underline;
 }
 
-.gmh-button:hover:not(:disabled),
-.gmh-action:hover:not(:disabled) {
-  background: var(--button-default-bgColor-hover, var(--bgColor-neutral-muted, #eff2f5));
-}
-
-.gmh-button:disabled,
-.gmh-action:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-
+/* A card like GitHub's own (description, merge card). */
 .gmh-panel {
-  position: relative;
   display: block;
   box-sizing: border-box;
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  flex: 1 0 100%;
-  margin: 8px 0;
+  flex: none;
   overflow-wrap: anywhere;
   text-align: start;
-  padding: 12px 16px;
   color: var(--fgColor-default, #1f2328);
   background: var(--bgColor-default, #fff);
-  border: 1px solid var(--borderColor-default, #d1d9e0);
-  border-radius: 6px;
+  border: var(--borderWidth-thin, 1px) solid var(--borderColor-default, #d1d9e0);
+  border-radius: var(--borderRadius-medium, 6px);
   font-size: 14px;
+  line-height: 1.5;
 }
 
-.gmh-panel p,
-.gmh-panel ul {
-  margin: 0 0 8px;
+/* In the side panel, below the merge box, with the side panel's padding. */
+[data-testid="mergebox-border-container"] + .gmh-panel {
+  width: auto;
+  margin: var(--base-size-16, 16px);
 }
 
-.gmh-panel > :last-child {
-  margin-bottom: 0;
+.gmh-panel *,
+.gmh-panel *::before,
+.gmh-panel *::after {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.gmh-header {
+  display: flex;
+  align-items: center;
+  gap: var(--base-size-8, 8px);
+  padding: var(--base-size-8, 8px) var(--base-size-8, 8px) var(--base-size-8, 8px) var(--base-size-16, 16px);
+  border-bottom: var(--borderWidth-thin, 1px) solid var(--borderColor-muted, var(--borderColor-default, #d1d9e0));
 }
 
 .gmh-heading {
-  margin: 0 24px 8px 0;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
   font-size: 14px;
   font-weight: 600;
+  line-height: 20px;
 }
 
 .gmh-heading.gmh-ok {
@@ -90,6 +124,47 @@
 .gmh-heading.gmh-needs_changes,
 .gmh-error {
   color: var(--fgColor-danger, #d1242f);
+}
+
+/* Like Primer's invisible IconButton. */
+.gmh-close {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--control-small-size, 28px);
+  height: var(--control-small-size, 28px);
+  padding: 0;
+  color: var(--fgColor-muted, #59636e);
+  background: transparent;
+  border: none;
+  border-radius: var(--borderRadius-medium, 6px);
+  cursor: pointer;
+}
+
+.gmh-close:hover {
+  background: var(--control-transparent-bgColor-hover, rgb(129 139 152 / 0.15));
+}
+
+.gmh-close:focus-visible,
+.gmh-link:focus-visible,
+.gmh-title:focus-visible,
+.gmh-body:focus-visible {
+  outline: 2px solid var(--focus-outlineColor, #0969da);
+  outline-offset: -2px;
+}
+
+.gmh-content {
+  padding: var(--base-size-16, 16px);
+}
+
+.gmh-panel p,
+.gmh-panel ul {
+  margin: 0 0 var(--base-size-8, 8px);
+}
+
+.gmh-content > :last-child,
+.gmh-footer > :last-child {
+  margin-bottom: 0;
 }
 
 .gmh-issues {
@@ -104,19 +179,20 @@
 }
 
 .gmh-trailers,
-.gmh-model {
+.gmh-model,
+.gmh-hint {
   font-size: 12px;
-}
-
-.gmh-model {
-  margin: 8px 0 0 !important;
-  text-align: end;
 }
 
 .gmh-label {
   display: block;
-  margin: 8px 0 4px;
+  margin: var(--base-size-16, 16px) 0 var(--base-size-4, 4px);
+  font-size: 14px;
   font-weight: 600;
+}
+
+.gmh-content > .gmh-label:first-child {
+  margin-top: 0;
 }
 
 .gmh-counter {
@@ -128,18 +204,24 @@
   color: var(--fgColor-danger, #d1242f);
 }
 
+/* Like Primer's TextInput and Textarea. */
 .gmh-title,
 .gmh-body {
-  box-sizing: border-box;
+  display: block;
   width: 100%;
   padding: 5px 12px;
-  font: inherit;
   font-family: var(--fontStack-monospace, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 13px;
-  color: inherit;
+  line-height: 20px;
+  color: var(--fgColor-default, #1f2328);
   background: var(--bgColor-default, #fff);
-  border: 1px solid var(--borderColor-default, #d1d9e0);
-  border-radius: 6px;
+  border: var(--borderWidth-thin, 1px) solid var(--control-borderColor-rest, var(--borderColor-default, #d1d9e0));
+  border-radius: var(--borderRadius-medium, 6px);
+  box-shadow: var(--shadow-inset, none);
+}
+
+.gmh-title {
+  height: var(--control-medium-size, 32px);
 }
 
 .gmh-body {
@@ -148,42 +230,24 @@
   resize: vertical;
 }
 
-.gmh-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
+.gmh-trailers {
+  margin-top: var(--base-size-4, 4px) !important;
 }
 
-.gmh-close,
-.gmh-link {
-  padding: 0;
-  font: inherit;
-  color: var(--fgColor-accent, #0969da);
-  background: none;
-  border: none;
-  cursor: pointer;
-}
-
-.gmh-close {
-  position: absolute;
-  top: 8px;
-  right: 12px;
-  font-size: 20px;
-  line-height: 1;
-  color: var(--fgColor-muted, #59636e);
-}
-
+/* Like a muted Primer Banner. */
 .gmh-checks {
-  margin-top: 12px;
-  padding: 8px 12px;
+  margin: var(--base-size-16, 16px) 0 var(--base-size-8, 8px);
+  padding: var(--base-size-8, 8px) var(--base-size-12, 12px);
   background: var(--bgColor-muted, #f6f8fa);
-  border-radius: 6px;
+  border: var(--borderWidth-thin, 1px) solid var(--borderColor-muted, var(--borderColor-default, #d1d9e0));
+  border-radius: var(--borderRadius-medium, 6px);
 }
 
 .gmh-checks-heading {
   font-size: 12px;
   font-weight: 600;
   color: var(--fgColor-muted, #59636e);
+  margin-bottom: var(--base-size-4, 4px) !important;
 }
 
 .gmh-checks ul {
@@ -196,29 +260,34 @@
   color: var(--fgColor-attention, #9a6700);
 }
 
-.gmh-panel *,
-.gmh-panel *::before,
-.gmh-panel *::after {
-  box-sizing: border-box;
-  max-width: 100%;
+.gmh-footer {
+  padding: var(--base-size-12, 12px) var(--base-size-16, 16px);
+  border-top: var(--borderWidth-thin, 1px) solid var(--borderColor-muted, var(--borderColor-default, #d1d9e0));
 }
 
 .gmh-actions {
+  display: flex;
   flex-wrap: wrap;
+  gap: var(--base-size-8, 8px);
 }
 
-.gmh-title,
-.gmh-body {
-  display: block;
+.gmh-content .gmh-actions {
+  margin-top: var(--base-size-8, 8px);
+}
+
+.gmh-model {
+  margin: var(--base-size-8, 8px) 0 0 !important;
 }
 
 .gmh-error {
-  margin-inline-end: 24px !important;
   white-space: pre-wrap;
 }
 
 .gmh-update-note {
-  margin-inline-end: 24px !important;
   font-weight: 600;
   color: var(--fgColor-attention, #9a6700);
+}
+
+.gmh-panel > .gmh-update-note {
+  margin: var(--base-size-12, 12px) var(--base-size-16, 16px) 0 !important;
 }

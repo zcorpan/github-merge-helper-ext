@@ -8,6 +8,7 @@ import {
   extractRefs,
   issueLinks,
   stripInvisible,
+  stripPrRef,
   titleLimit,
   validPullRef,
 } from "../src/safety.js";
@@ -118,4 +119,13 @@ test("titleLimit is a hard 72 for whatwg only", () => {
   assert.equal(titleLimit("whatwg"), 72);
   assert.equal(titleLimit("WHATWG"), 72);
   assert.equal(titleLimit("web-platform-tests"), null);
+});
+
+test("stripPrRef only drops this PR's reference from the end", () => {
+  assert.equal(stripPrRef("Add a shapes page (#5)", 5), "Add a shapes page");
+  assert.equal(stripPrRef("Add a shapes page  (#5)", 5), "Add a shapes page");
+  assert.equal(stripPrRef("Add a shapes page (#15)", 5), "Add a shapes page (#15)");
+  assert.equal(stripPrRef("Fix (#5) handling", 5), "Fix (#5) handling");
+  assert.equal(stripPrRef("Add a shapes page", 5), "Add a shapes page");
+  assert.equal(stripPrRef("(#5)", 5), "(#5)");
 });

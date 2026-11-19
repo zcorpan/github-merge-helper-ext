@@ -12,8 +12,8 @@ python3 native/install.py --set-key # change the key</pre>
   <button type="button" id="test-connection">Test connection</button>
   <span id="test-status" role="status"></span>
 
-  <label class="checkbox"><input type="checkbox" name="cleanUpSquash"> Clean up GitHub’s squash message automatically</label>
-  <p class="help">When you open the squash commit editor, remove the “(#123)” GitHub adds to the title and use the first commit’s description (plus Co-authored-by lines) as the description. No Claude request; a “Restore GitHub’s message” button undoes it.</p>
+  <label class="checkbox"><input type="checkbox" name="cleanUpSquash"> Clean up GitHub’s squash commit title automatically</label>
+  <p class="help">When you open the squash commit editor, remove the “(#123)” GitHub adds to the title. The description is left alone. No Claude request; “Restore” under the title undoes it.</p>
 
   <label>Model
     <input type="text" name="model" list="models">

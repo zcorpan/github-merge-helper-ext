@@ -41,6 +41,15 @@ export function stripInvisible(text) {
   return { text: cleaned, removed };
 }
 
+// GitHub's default squash commit title for PR N ends in " (#N)". Returns the
+// title without it, or unchanged if it doesn't end that way or would be empty.
+export function stripPrRef(title, number) {
+  const suffix = `(#${number})`;
+  if (!title.endsWith(suffix)) return title;
+  const stripped = title.slice(0, -suffix.length).trimEnd();
+  return stripped || title;
+}
+
 const URL_PATTERN = /\bhttps?:\/\/[^\s<>"'`]{1,2000}/gi;
 // Quantifiers are bounded (GitHub's owner/repo name limits) so matching stays
 // linear on long attacker-controlled input.
