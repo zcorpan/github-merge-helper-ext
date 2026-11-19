@@ -39,9 +39,6 @@
       "js": [
         "redirect.js"
       ],
-      "css": [
-        "redirect.css"
-      ],
       "run_at": "document_start"
     },
     {

@@ -1,74 +1,55 @@
-// Turns github.com/owner/repo#91 into github.com/owner/repo/issues/91 (which
-// GitHub redirects to /pull/91 for PRs). Only on a repository's front page,
-// and not when the hash is a README heading like "## 2024". Punctuation copied
-// along with the reference ("owner/repo#91," or "#91).") is ignored.
+// Fixes up GitHub URLs pasted from text, from the URL alone (no page needed):
+// - github.com/owner/repo#91 goes to github.com/owner/repo/issues/91 (which
+//   GitHub redirects to /pull/91 for PRs);
+// - punctuation copied along with a URL is dropped: owner/repo#91, or
+//   owner/repo. or owner/repo/pull/91). (GitHub has nothing at those URLs).
 
-const REPO_ROOT = /^\/([A-Za-z0-9-]{1,39})\/([A-Za-z0-9._-]{1,100})\/?$/;
-const ISSUE_HASH = /^#([1-9][0-9]{0,8})([.,;:!?)\]}>'"’”»…*_`]{0,8})$/u;
-const NWO = 'meta[name="octolytics-dimension-repository_nwo"]';
-// GitHub's page data, which has the README's HTML well before the README
-// itself is in the page.
-const PAGE_DATA = 'script[data-target="react-app.embeddedData"]';
+// Characters that end a sentence or close a bracket, quote, or Markdown span.
+const PUNCT = "[.,;:!?)\\]}>'\"’”»…*_`]{1,8}";
+// The same after a repository name or number, minus "_", which repository
+// names can end with.
+const PATH_PUNCT = "[.,;:!?)\\]}>'\"’”»…*`]{1,8}";
+const OWNER = "[A-Za-z0-9-]{1,39}";
+const REPO = "[A-Za-z0-9._-]{1,100}?";
+const REPO_ROOT = new RegExp(`^/(${OWNER})/(${REPO})(${PATH_PUNCT})?/?$`, "u");
+// GitHub itself redirects /pull/91. to /pull/new/91. (signed out) or
+// /compare/91.?expand=1 (signed in), and /issues/91. to /issues/created_by/91.
+const NUMBERED = new RegExp(
+  `^/(${OWNER})/(${REPO})/(issues|issues/created_by|pull|pull/new|compare)/([1-9][0-9]{0,8})${PATH_PUNCT}$`,
+  "u",
+);
+const KIND = { issues: "issues", "issues/created_by": "issues", pull: "pull", "pull/new": "pull", compare: "pull" };
+const ISSUE_HASH = new RegExp(`^#([1-9][0-9]{0,8})(?:${PUNCT})?$`, "u");
 
-// The issue reference in a repository front page URL, or null. exact: the hash
-// is only digits, so it could also be a README heading.
-export function parseIssueRef(pathname, hash) {
-  const path = REPO_ROOT.exec(pathname);
-  if (!path) return null;
-  let decoded;
+// GitHub's own top-level pages; no user or organization has these names.
+const RESERVED = new Set(
+  ("about account apps blog codespaces collections contact copilot customer-stories dashboard discussions enterprise " +
+    "enterprises events explore features github-copilot issues login logout marketplace new notifications orgs " +
+    "organizations partners pricing pulls readme repos resources search security sessions settings signup site " +
+    "solutions sponsors stars team topics trending users watching").split(" "),
+);
+
+// The URL (path, query, and hash) to go to instead, or null.
+export function fixedUrl(pathname, search, hash) {
+  let path, fragment;
   try {
-    decoded = decodeURIComponent(hash);
+    path = decodeURIComponent(pathname);
+    fragment = decodeURIComponent(hash);
   } catch {
     return null;
   }
-  const match = ISSUE_HASH.exec(decoded);
-  if (!match) return null;
-  return { owner: path[1], repo: path[2], number: match[1], exact: match[2] === "" };
-}
-
-// What to do with the document parsed so far: the path to go to, null to stay,
-// or undefined if it can't tell yet. complete: the document is fully parsed.
-export function issueRefVerdict(ref, doc, complete) {
-  // GitHub's own marker for repository pages; rules out /orgs/name and such.
-  // It's in <head>, so once there's a <body> it isn't coming.
-  const meta = doc.querySelector(NWO);
-  if (!meta) return complete || doc.body ? null : undefined;
-  if (meta.content?.toLowerCase() !== `${ref.owner}/${ref.repo}`.toLowerCase()) return null;
-  const path = `/${ref.owner}/${ref.repo}/issues/${ref.number}`;
-  // GitHub's heading anchors never end in punctuation.
-  if (!ref.exact) return path;
-  if (doc.getElementById(`user-content-${ref.number}`) || doc.getElementById(ref.number)) return null;
-  const data = doc.querySelector(PAGE_DATA);
-  if (data && (complete || parsedPast(data))) {
-    const heading = readmeHasAnchor(data.textContent, ref.number);
-    if (heading !== null) return heading ? null : path;
+  const numbered = NUMBERED.exec(path);
+  if (numbered) {
+    const [, owner, repo, kind, number] = numbered;
+    if (RESERVED.has(owner.toLowerCase())) return null;
+    // The query on GitHub's redirect targets is GitHub's (?expand=1), not the pasted URL's.
+    const query = KIND[kind] === kind ? search : "";
+    return `/${owner}/${repo}/${KIND[kind]}/${number}${query}${hash}`;
   }
-  return complete ? path : undefined;
-}
-
-// Returns the path to go to from a fully parsed document, or null.
-export function issueRefPath(pathname, hash, doc) {
-  const ref = parseIssueRef(pathname, hash);
-  return ref ? issueRefVerdict(ref, doc, true) : null;
-}
-
-// Whether the parser is done with the element (it has added something after it).
-function parsedPast(el) {
-  for (let node = el; node && node !== node.ownerDocument?.body; node = node.parentNode) {
-    if (node.nextSibling) return true;
-  }
-  return false;
-}
-
-// Whether the README (or another overview file) in GitHub's page data has a
-// heading with this anchor, or null if the data doesn't have the files.
-function readmeHasAnchor(json, number) {
-  let files;
-  try {
-    files = JSON.parse(json)?.payload?.codeViewRepoRoute?.overview?.overviewFiles;
-  } catch {
-    return null;
-  }
-  if (!Array.isArray(files)) return null;
-  return files.some((file) => typeof file?.richText === "string" && file.richText.includes(`id="user-content-${number}"`));
+  const root = REPO_ROOT.exec(path);
+  if (!root || RESERVED.has(root[1].toLowerCase())) return null;
+  const [, owner, repo, punct] = root;
+  const issue = ISSUE_HASH.exec(fragment)?.[1];
+  if (issue) return `/${owner}/${repo}/issues/${issue}`;
+  return punct ? `/${owner}/${repo}${search}${hash}` : null;
 }

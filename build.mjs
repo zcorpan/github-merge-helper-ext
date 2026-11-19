@@ -6,7 +6,7 @@ const outdir = "dist";
 
 await rm(outdir, { recursive: true, force: true });
 await mkdir(outdir);
-for (const file of ["manifest.json", "src/content.css", "src/redirect.css", "src/options.html", "src/options.css"]) {
+for (const file of ["manifest.json", "src/content.css", "src/options.html", "src/options.css"]) {
   await cp(file, `${outdir}/${file.split("/").pop()}`);
 }
 
