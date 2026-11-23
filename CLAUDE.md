@@ -33,9 +33,9 @@ Request flow: content script → background script → GitHub REST API (read-onl
 
 Request shape changes need to land in both `src/background.js` and the allowlist in `native/host.py`. When the extension starts relying on new native host behavior, bump `HOST_VERSION` in `native/host.py` and `MIN_HOST_VERSION` in `src/background.js` together: users run the host from their own checkout, and older hosts (or ones whose installed packages don't match `requirements.txt`) make the extension tell them to `git pull` and re-run `install.py`.
 
-## Publishing every change
+## Publishing changes
 
-After every change that affects the extension (`src/`, `manifest.json`, `build.mjs`, dependencies), commit it and run `npm run release` (patch bump by default), which submits it to AMO's listed channel with the source package (AMO reviews it; installs update from AMO), publishes GitHub release notes, and pushes `main`. See RELEASING.md. The maintainer has authorized this for every change, so don't ask first. For changes that don't affect the extension (docs, tests, `native/`, `scripts/`), just push `main`. A release needs the AMO credentials in the Keychain (see RELEASING.md); if they're missing, stop and say so. The listing's privacy policy, icon and screenshots are uploaded separately (`scripts/amo_listing.py`); run it when files in `amo/` change.
+Commit each change, then ask the maintainer before pushing or releasing. For changes that affect the extension (`src/`, `manifest.json`, `build.mjs`, dependencies), the release is `npm run release` (patch bump by default), which submits it to AMO's listed channel with the source package (AMO reviews it; installs update from AMO), publishes GitHub release notes, and pushes `main`. See RELEASING.md. For changes that don't affect the extension (docs, tests, `native/`, `scripts/`), it's just pushing `main`. A release needs the AMO credentials in the Keychain (see RELEASING.md); if they're missing, stop and say so. The listing's privacy policy, icon and screenshots are uploaded separately (`scripts/amo_listing.py`); offer to run it when files in `amo/` change.
 
 ## Security review on every change
 
