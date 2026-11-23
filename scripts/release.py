@@ -1,6 +1,6 @@
 """Submit a new version to AMO (listed) and publish release notes on GitHub.
 
-    python3 -I scripts/release.py [patch|minor|major]   (default: patch)
+    python3 -I scripts/release.py [--dry-run] [patch|minor|major]   (default: patch)
 
 Bumps the version, runs the tests and lint, commits "Release X.Y.Z", then
 submits dist/ with the source package (scripts/source-zip.py) and the listing
@@ -8,6 +8,10 @@ metadata (amo/listing.json, with the source commit added to the reviewer
 notes) to AMO's listed channel. AMO reviews it and installs update from AMO.
 It doesn't wait for approval. Then it tags, pushes, and creates a GitHub
 release with the notes. See RELEASING.md.
+
+--dry-run runs the tests and lint and builds the source package, but changes
+nothing: no version bump, commit, upload, tag or push, and no credentials are
+needed.
 
 Needs AMO API credentials in the macOS Keychain (see README, "Releasing"),
 `gh` logged in with push access, and a clean, up-to-date main.
@@ -36,7 +40,10 @@ def run(*cmd, env=None, capture=False):
 
 
 def bumped(version, level):
-    major, minor, patch = (int(part) for part in version.split("."))
+    parts = [int(part) for part in version.split(".")[:3]]
+    if len(parts) != 3:
+        sys.exit(f"Can't bump version {version}")
+    major, minor, patch = parts
     if level == "major":
         return f"{major + 1}.0.0"
     if level == "minor":
@@ -54,6 +61,13 @@ def check_clean_main():
         sys.exit("origin/main has commits that main doesn't; pull first.")
 
 
+def run_checks():
+    run("npm", "test")
+    if (ROOT / "native" / ".venv" / "bin" / "python").exists():
+        run("npm", "run", "test:native")
+    run("npm", "run", "lint")
+
+
 def release_notes(new):
     tags = run("git", "tag", "--list", "v*", "--sort=-v:refname", capture=True).split()
     previous = next((tag for tag in tags if tag != f"v{new}"), None)
@@ -66,19 +80,26 @@ def release_notes(new):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("level", nargs="?", choices=["patch", "minor", "major"], default="patch")
+    parser.add_argument("--dry-run", action="store_true", help="check and build the source package; change nothing")
     args = parser.parse_args()
 
     check_clean_main()
-    # Passed to web-ext through the environment, never on a command line.
-    creds = credentials()
-    env = {**os.environ, "WEB_EXT_API_KEY": creds[0], "WEB_EXT_API_SECRET": creds[1]}
-
     manifest_path = ROOT / "manifest.json"
     manifest = json.loads(manifest_path.read_text())
     new = bumped(manifest["version"], args.level)
-    print(f"Releasing {manifest['version']} -> {new}")
+    print(f"Releasing {manifest['version']} -> {new}" + (" (dry run)" if args.dry_run else ""))
     ARTIFACTS.mkdir(exist_ok=True)
     source = ARTIFACTS / f"github-merge-helper-source-{new}.zip"
+
+    if args.dry_run:
+        run_checks()
+        run(sys.executable, "-I", str(ROOT / "scripts" / "source-zip.py"), str(source))
+        print("Dry run: nothing was bumped, committed, uploaded, tagged or pushed.")
+        return
+
+    # Passed to web-ext through the environment, never on a command line.
+    creds = credentials()
+    env = {**os.environ, "WEB_EXT_API_KEY": creds[0], "WEB_EXT_API_SECRET": creds[1]}
 
     committed = False
     try:
@@ -86,10 +107,7 @@ def main():
         manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
         run("npm", "version", new, "--no-git-tag-version", "--allow-same-version")
 
-        run("npm", "test")
-        if (ROOT / "native" / ".venv" / "bin" / "python").exists():
-            run("npm", "run", "test:native")
-        run("npm", "run", "lint")
+        run_checks()
 
         # Commit first, so the source package and the reviewer notes name an exact commit.
         run("git", "add", "manifest.json", "package.json", "package-lock.json")

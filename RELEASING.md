@@ -16,7 +16,8 @@ security add-generic-password -U -s github-merge-helper-amo -a jwt-secret -w
 On a clean, up-to-date `main`:
 
 ```sh
-npm run release            # patch; or: npm run release -- minor
+npm run release -- --dry-run   # runs the checks and builds the source package, changes nothing
+npm run release                # patch; or: npm run release -- minor
 ```
 
 [`scripts/release.py`](scripts/release.py):

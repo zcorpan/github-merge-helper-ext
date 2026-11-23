@@ -35,7 +35,7 @@ Request shape changes need to land in both `src/background.js` and the allowlist
 
 ## Publishing changes
 
-Commit each change, then ask the maintainer before pushing or releasing. For changes that affect the extension (`src/`, `manifest.json`, `build.mjs`, dependencies), the release is `npm run release` (patch bump by default), which submits it to AMO's listed channel with the source package (AMO reviews it; installs update from AMO), publishes GitHub release notes, and pushes `main`. See RELEASING.md. For changes that don't affect the extension (docs, tests, `native/`, `scripts/`), it's just pushing `main`. A release needs the AMO credentials in the Keychain (see RELEASING.md); if they're missing, stop and say so. The listing's privacy policy, icon and screenshots are uploaded separately (`scripts/amo_listing.py`); offer to run it when files in `amo/` change.
+Commit each change, then ask the maintainer before pushing or releasing. For changes that affect the extension (`src/`, `manifest.json`, `build.mjs`, dependencies), run `npm run release -- --dry-run` before asking; the release is `npm run release` (patch bump by default), which submits it to AMO's listed channel with the source package (AMO reviews it; installs update from AMO), publishes GitHub release notes, and pushes `main`. See RELEASING.md. For changes that don't affect the extension (docs, tests, `native/`, `scripts/`), it's just pushing `main`. A release needs the AMO credentials in the Keychain (see RELEASING.md); if they're missing, stop and say so. The listing's privacy policy, icon and screenshots are uploaded separately (`scripts/amo_listing.py`); offer to run it when files in `amo/` change.
 
 ## Security review on every change
 
