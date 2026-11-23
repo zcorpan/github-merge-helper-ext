@@ -11,6 +11,12 @@ function redirect() {
   // Firefox ignores a navigation started this early unless the current load is
   // stopped first; stopping it also saves loading the page.
   window.stop();
+  // The stopped page stays up until the new one arrives; give it the dark
+  // canvas in dark mode, as GitHub's own pages have, so it doesn't flash white.
+  const root =
+    document.documentElement ??
+    document.appendChild(document.createElement("html"));
+  root.style.colorScheme = "light dark";
   location.replace(url);
 }
 
