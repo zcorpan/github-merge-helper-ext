@@ -34,6 +34,19 @@ test("punctuation copied after a repo or issue URL is dropped", () => {
   assert.equal(fix("/whatwg/html/issues/created_by/zcorpan"), null);
 });
 
+test("a commit reference goes to the commit", () => {
+  assert.equal(fix("/whatwg/html@170f030"), "/whatwg/html/commit/170f030");
+  assert.equal(fix("/whatwg/html@170F030"), "/whatwg/html/commit/170F030");
+  assert.equal(fix("/whatwg/html@170f0302196cd16ba1427d47cc02c893da329caa"), "/whatwg/html/commit/170f0302196cd16ba1427d47cc02c893da329caa");
+  assert.equal(fix("/whatwg/html@170f030", "#diff-1", "?w=1"), "/whatwg/html/commit/170f030?w=1#diff-1");
+  for (const path of ["/whatwg/html@170f030.", "/whatwg/html@170f030),", "/whatwg/html@170f030%E2%80%9D", "/whatwg/html/commit/170f030.", "/whatwg/html/commit/170f030)."]) {
+    assert.equal(fix(path), "/whatwg/html/commit/170f030", path);
+  }
+  for (const path of ["/whatwg/html@170f03", "/whatwg/html@170f03g", "/whatwg/html@main", "/whatwg/html@170f030/", "/whatwg@170f030", "/whatwg/html/commit/170f030", "/whatwg/html/commit/170f03.", "/whatwg/html/commits/170f030.", "/orgs/whatwg@170f030", "/settings/x/commit/170f030."]) {
+    assert.equal(fix(path), null, path);
+  }
+});
+
 test("real repository names and other pages are left alone", () => {
   for (const path of ["/whatwg/html", "/whatwg/html/", "/whatwg/foo.js", "/whatwg/.github", "/whatwg/html_", "/whatwg/html-", "/whatwg/html/pull/123", "/whatwg/html/pulls."]) {
     assert.equal(fix(path), null, path);

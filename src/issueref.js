@@ -1,8 +1,10 @@
 // Fixes up GitHub URLs pasted from text, from the URL alone (no page needed):
 // - github.com/owner/repo#91 goes to github.com/owner/repo/issues/91 (which
 //   GitHub redirects to /pull/91 for PRs);
+// - github.com/owner/repo@1a2b3c4 goes to github.com/owner/repo/commit/1a2b3c4;
 // - punctuation copied along with a URL is dropped: owner/repo#91, or
-//   owner/repo. or owner/repo/pull/91). (GitHub has nothing at those URLs).
+//   owner/repo. or owner/repo/pull/91). or owner/repo/commit/1a2b3c4. (GitHub
+//   has nothing at those URLs).
 
 // Characters that end a sentence or close a bracket, quote, or Markdown span.
 const PUNCT = "[.,;:!?)\\]}>'\"’”»…*_`]{1,8}";
@@ -19,6 +21,9 @@ const NUMBERED = new RegExp(
   "u",
 );
 const KIND = { issues: "issues", "issues/created_by": "issues", pull: "pull", "pull/new": "pull", compare: "pull" };
+// owner/repo@sha (GitHub's commit reference syntax) or a commit URL. GitHub
+// finds commits by 7 or more hex digits.
+const COMMIT = new RegExp(`^/(${OWNER})/(${REPO})(@|/commit/)([0-9a-fA-F]{7,64})(${PATH_PUNCT})?$`, "u");
 const ISSUE_HASH = new RegExp(`^#([1-9][0-9]{0,8})(?:${PUNCT})?$`, "u");
 
 // GitHub's own top-level pages; no user or organization has these names.
@@ -45,6 +50,12 @@ export function fixedUrl(pathname, search, hash) {
     // The query on GitHub's redirect targets is GitHub's (?expand=1), not the pasted URL's.
     const query = KIND[kind] === kind ? search : "";
     return `/${owner}/${repo}/${KIND[kind]}/${number}${query}${hash}`;
+  }
+  const commit = COMMIT.exec(path);
+  if (commit) {
+    const [, owner, repo, sep, sha, punct] = commit;
+    if (RESERVED.has(owner.toLowerCase()) || (sep !== "@" && !punct)) return null;
+    return `/${owner}/${repo}/commit/${sha}${search}${hash}`;
   }
   const root = REPO_ROOT.exec(path);
   if (!root || RESERVED.has(root[1].toLowerCase())) return null;

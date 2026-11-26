@@ -15,7 +15,7 @@ Without Claude, the extension also cleans up GitHub's default squash title when 
 
 The button is there whenever GitHub shows a merge button, even while GitHub has it disabled (e.g. while checking whether the PR can be merged, with merge conflicts, or without write access, where GitHub shows an inactive merge button too). If the extension finds GitHub's merge method menu but not the merge button next to it (GitHub changed its markup), it logs a warning to the console.
 
-Unrelated to merging: an issue reference typed as a URL, like `github.com/whatwg/html#123`, goes to `github.com/whatwg/html/issues/123` (GitHub then redirects PRs to `/pull/123`), before the repository page loads. Punctuation copied along with a GitHub URL is dropped, as in `github.com/whatwg/html#123),`, `github.com/whatwg/html.`, or `github.com/whatwg/html/pull/123.`. This works from the URL alone, so `#123` also redirects when the README has a `## 123` heading.
+Unrelated to merging: an issue reference typed as a URL, like `github.com/whatwg/html#123`, goes to `github.com/whatwg/html/issues/123` (GitHub then redirects PRs to `/pull/123`), before the repository page loads. A commit reference like `github.com/whatwg/html@1a2b3c4` goes to `github.com/whatwg/html/commit/1a2b3c4`. Punctuation copied along with a GitHub URL is dropped, as in `github.com/whatwg/html#123),`, `github.com/whatwg/html.`, `github.com/whatwg/html/pull/123.`, or `github.com/whatwg/html@1a2b3c4.`. This works from the URL alone, so `#123` also redirects when the README has a `## 123` heading.
 
 ## Rules
 
